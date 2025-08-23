@@ -54,7 +54,56 @@ const LayerlinePanel = () => {
         </Select>
       </Row>
 
-      {/* Stitch type removed */}
+      <Row label="Increase Factor">
+        <input
+          type="range"
+          min={0.5}
+          max={2.0}
+          step={0.05}
+          value={settings.increaseFactor ?? 1.0}
+          onChange={(e) => setSettings({ increaseFactor: parseFloat(e.target.value) })}
+          style={{ width: 180 }}
+        />
+      </Row>
+
+      <Row label="Decrease Factor">
+        <input
+          type="range"
+          min={0.5}
+          max={2.0}
+          step={0.05}
+          value={settings.decreaseFactor ?? 1.0}
+          onChange={(e) => setSettings({ decreaseFactor: parseFloat(e.target.value) })}
+          style={{ width: 180 }}
+        />
+      </Row>
+
+      <Row label="Plan Spacing Mode">
+        <Select
+          value={settings.planSpacingMode || 'even'}
+          onChange={(v) => setSettings({ planSpacingMode: v })}
+          style={{ width: 180 }}
+        >
+          <option value="even">Auto spacing (low-poly)</option>
+          <option value="jagged">Jagged blend</option>
+        </Select>
+      </Row>
+
+      <Row label="Show Full Scaffold">
+        <input
+          type="checkbox"
+          checked={Boolean(settings.showFullScaffold)}
+          onChange={(e) => setSettings({ showFullScaffold: e.target.checked })}
+        />
+      </Row>
+
+      <Row label="Show Full Scaffold">
+        <input
+          type="checkbox"
+          checked={Boolean(settings.showFullScaffold)}
+          onChange={(e) => setSettings({ showFullScaffold: e.target.checked })}
+        />
+      </Row>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button className="btn btn-primary" onClick={handleGenerate} disabled={isGenerating}>
@@ -84,6 +133,55 @@ const LayerlinePanel = () => {
       </div>
 
       <div className="properties-section" style={{ marginTop: 15 }}>
+        <h3>Magic Ring Scaffolding</h3>
+        <div className="property-item">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={ui.showScaffold}
+              onChange={(e) => setVisibility({ showScaffold: e.target.checked })}
+            />
+            Show MR scaffold
+          </label>
+        </div>
+        <div className="property-item" style={{ marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={ui.showNodes}
+              onChange={(e) => setVisibility({ showNodes: e.target.checked })}
+            />
+            Show MR nodes
+          </label>
+        </div>
+        <div className="property-item" style={{ marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ minWidth: 120 }}>Tighten Factor:</span>
+            <input
+              type="range"
+              min="0.1"
+              max="2.0"
+              step="0.1"
+              value={settings.tightenFactor || 0.8}
+              onChange={(e) => setSettings({ tightenFactor: parseFloat(e.target.value) })}
+              style={{ flex: 1 }}
+            />
+            <span style={{ minWidth: 30, textAlign: 'right' }}>{settings.tightenFactor || 0.8}</span>
+          </label>
+        </div>
+        <div className="property-item" style={{ marginTop: 8 }}>
+          <span className="property-label">Handedness</span>
+          <Select
+            value={settings.handedness || 'right'}
+            onChange={(v) => setSettings({ handedness: v })}
+          >
+            <option value="right">Right-handed</option>
+            <option value="left">Left-handed</option>
+          </Select>
+        </div>
+      </div>
+
+      <div className="properties-section" style={{ marginTop: 15 }}>
         <h3>Options</h3>
         <div className="property-item">
           <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -103,26 +201,6 @@ const LayerlinePanel = () => {
               onChange={(e) => setSettings({ intersectionHelpers: e.target.checked })}
             />
             Intersection helpers (edge arcs/connectors)
-          </label>
-        </div>
-        <div className="property-item" style={{ marginTop: 8 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={ui.showScaffold}
-              onChange={(e) => setVisibility({ showScaffold: e.target.checked })}
-            />
-            Show MR scaffold
-          </label>
-        </div>
-        <div className="property-item" style={{ marginTop: 8 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={ui.showNodes}
-              onChange={(e) => setVisibility({ showNodes: e.target.checked })}
-            />
-            Show MR nodes
           </label>
         </div>
         

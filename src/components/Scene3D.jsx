@@ -5,12 +5,13 @@ import { useLayerlineStore } from '../stores/layerlineStore'
 import { useNodeStore } from '../stores/nodeStore'
 import LayerlineViewer from './LayerlineViewer'
 import NodeViewer from './NodeViewer'
+import { Text } from '@react-three/drei'
 import * as THREE from 'three'
 
 const Scene3D = () => {
   const { objects, selectedObject } = useSceneStore()
   const { generated, settings } = useLayerlineStore()
-  const { nodes, scaffold, ui } = useNodeStore()
+  const { nodes, scaffold, nextNodes, nextScaffold, chainScaffold, stitchCounts, scaffoldCenter, ui } = useNodeStore()
 
   const handleDrop = useCallback((e) => {
     e.preventDefault()
@@ -50,7 +51,27 @@ const Scene3D = () => {
 
       {/* Render MR nodes and scaffold */}
       {nodes && (ui?.showNodes || ui?.showScaffold) && (
-        <NodeViewer nodeRing0={nodes} scaffold={scaffold} color={'#ffaa00'} showNodes={ui.showNodes} showScaffold={ui.showScaffold} />
+        <NodeViewer nodeRing0={nodes} scaffold={scaffold} color={'#ffaa00'} showNodes={ui.showNodes} showScaffold={ui.showScaffold} showConnections={false} />
+      )}
+
+      {/* Render next-layer nodes and scaffold if present */}
+      {(nextNodes || nextScaffold) && (ui?.showNodes || ui?.showScaffold) && (
+        <NodeViewer nodeRing0={nextNodes || { nodes: [], meta: {} }} scaffold={nextScaffold} color={'#00aaff'} showNodes={false} showScaffold={ui.showScaffold} />
+      )}
+
+      {settings.showFullScaffold && Array.isArray(chainScaffold) && chainScaffold.length > 0 && ui?.showScaffold && (
+        <NodeViewer nodeRing0={{ nodes: [], meta: {} }} scaffold={{ segments: chainScaffold }} color={'#ff66ff'} showNodes={false} showScaffold={true} />
+      )}
+
+      {/* Stitch count labels per layer */}
+      {Array.isArray(stitchCounts) && stitchCounts.length > 0 && scaffoldCenter && (
+        <group>
+          {stitchCounts.map((entry, i) => (
+            <Text key={`count-${i}`} position={[scaffoldCenter[0], entry.y + 0.02, scaffoldCenter[2]]} fontSize={0.15} color="#ffffff" anchorX="center" anchorY="middle">
+              {`S:${entry.count}`}
+            </Text>
+          ))}
+        </group>
       )}
     </group>
   )
