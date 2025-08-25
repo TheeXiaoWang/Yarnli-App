@@ -78,14 +78,25 @@ const LayerlinePanel = () => {
         />
       </Row>
 
-      <Row label="Plan Spacing Mode">
+      <Row label="Increase Distribution">
         <Select
-          value={settings.planSpacingMode || 'even'}
-          onChange={(v) => setSettings({ planSpacingMode: v })}
+          value={settings.planIncreaseMode || settings.planSpacingMode || 'even'}
+          onChange={(v) => setSettings({ planIncreaseMode: v })}
           style={{ width: 180 }}
         >
-          <option value="even">Auto spacing (low-poly)</option>
-          <option value="jagged">Jagged blend</option>
+          <option value="even">Even</option>
+          <option value="jagged">Jagged</option>
+        </Select>
+      </Row>
+
+      <Row label="Decrease Distribution">
+        <Select
+          value={settings.planDecreaseMode || settings.planSpacingMode || 'even'}
+          onChange={(v) => setSettings({ planDecreaseMode: v })}
+          style={{ width: 180 }}
+        >
+          <option value="even">Even</option>
+          <option value="jagged">Jagged</option>
         </Select>
       </Row>
 
@@ -152,6 +163,16 @@ const LayerlinePanel = () => {
               onChange={(e) => setVisibility({ showNodes: e.target.checked })}
             />
             Show MR nodes
+          </label>
+        </div>
+        <div className="property-item" style={{ marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={ui.showNextPoints}
+              onChange={(e) => setVisibility({ showNextPoints: e.target.checked })}
+            />
+            Show next-layer points
           </label>
         </div>
         <div className="property-item" style={{ marginTop: 8 }}>

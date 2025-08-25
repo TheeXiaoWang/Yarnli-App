@@ -11,7 +11,7 @@ import * as THREE from 'three'
 const Scene3D = () => {
   const { objects, selectedObject } = useSceneStore()
   const { generated, settings } = useLayerlineStore()
-  const { nodes, scaffold, nextNodes, nextScaffold, chainScaffold, stitchCounts, scaffoldCenter, ui } = useNodeStore()
+  const { nodes, scaffold, nextNodes, nextScaffold, nextPoints, nextLayersPoints, chainScaffold, stitchCounts, scaffoldCenter, ui } = useNodeStore()
 
   const handleDrop = useCallback((e) => {
     e.preventDefault()
@@ -54,9 +54,18 @@ const Scene3D = () => {
         <NodeViewer nodeRing0={nodes} scaffold={scaffold} color={'#ffaa00'} showNodes={ui.showNodes} showScaffold={ui.showScaffold} showConnections={false} />
       )}
 
-      {/* Render next-layer nodes and scaffold if present */}
-      {(nextNodes || nextScaffold) && (ui?.showNodes || ui?.showScaffold) && (
-        <NodeViewer nodeRing0={nextNodes || { nodes: [], meta: {} }} scaffold={nextScaffold} color={'#00aaff'} showNodes={false} showScaffold={ui.showScaffold} />
+      {/* Render next-layer points (cyan) and scaffold if present */}
+      {(nextPoints || nextScaffold) && (ui?.showNodes || ui?.showScaffold) && (
+        <NodeViewer nodeRing0={ nextPoints ? { nodes: nextPoints.map((n) => ({ p: n.p })), meta: {} } : { nodes: [], meta: {} } } scaffold={nextScaffold} color={'#00aaff'} showNodes={ui?.showNextPoints} showScaffold={ui.showScaffold} />
+      )}
+
+      {/* Render point markers for all processed next layers when enabled */}
+      {ui?.showNextPoints && Array.isArray(nextLayersPoints) && nextLayersPoints.length > 0 && (
+        <group>
+          {nextLayersPoints.map((entry, idx) => (
+            <NodeViewer key={`nx-${idx}`} nodeRing0={{ nodes: entry.nodes.map((n) => ({ p: n.p })), meta: {} }} scaffold={{ segments: [] }} color={'#00aaff'} showNodes={true} showScaffold={false} />
+          ))}
+        </group>
       )}
 
       {settings.showFullScaffold && Array.isArray(chainScaffold) && chainScaffold.length > 0 && ui?.showScaffold && (

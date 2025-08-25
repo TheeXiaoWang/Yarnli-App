@@ -9,7 +9,9 @@ export const useLayerlineStore = create((set, get) => ({
     tightenFactor: 1.0,
     increaseFactor: 1.0, // scales increases derived from circumference ratio
     decreaseFactor: 1.0, // scales decreases when circumference shrinks
-    planSpacingMode: 'even', // 'even' | 'jagged'
+    planSpacingMode: 'even', // default for both inc/dec if specific not set
+    planIncreaseMode: 'even', // 'even' | 'jagged'
+    planDecreaseMode: 'even', // 'even' | 'jagged'
     showFullScaffold: false,
 
     // Advanced/legacy (still supported by generators if provided)

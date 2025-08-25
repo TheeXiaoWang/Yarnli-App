@@ -8,10 +8,17 @@ import { useLayerlineStore } from '../stores/layerlineStore'
 const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, showScaffold = true, showConnections = false }) => {
   const nodeData = useMemo(() => {
     if (!nodeRing0?.nodes) return []
-    return nodeRing0.nodes.map((n) => ({
-      position: new THREE.Vector3(n.p[0], n.p[1], n.p[2]),
-      tangent: new THREE.Vector3(n.tangent[0], n.tangent[1], n.tangent[2]).normalize(),
-    }))
+    // Only include entries that have both position and tangent; skip preview-only points
+    const out = []
+    for (const n of nodeRing0.nodes) {
+      if (Array.isArray(n?.p) && n.p.length === 3 && Array.isArray(n?.tangent) && n.tangent.length === 3) {
+        out.push({
+          position: new THREE.Vector3(n.p[0], n.p[1], n.p[2]),
+          tangent: new THREE.Vector3(n.tangent[0], n.tangent[1], n.tangent[2]).normalize(),
+        })
+      }
+    }
+    return out
   }, [nodeRing0])
 
   const scaffoldLines = useMemo(() => {
@@ -71,12 +78,23 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
         <Line key={`sc-${i}`} points={pts} color={'#ff00ff'} lineWidth={4} opacity={1} transparent />
       ))}
 
+      {/* If nodeRing0 has raw points without tangents (e.g., next-layer preview), draw small markers */}
+      {showNodes && (nodeData.length === 0) && nodeRing0 && Array.isArray(nodeRing0.nodes) && nodeRing0.nodes.map((n, i) => {
+        const r = 0.03
+        // Shift marker up by its radius so the sphere center sits on the layer plane
+        const pos = [n.p[0], n.p[1] + r, n.p[2]]
+        return (
+        <mesh key={`pt-${i}`} position={pos} scale={r}>
+          <sphereGeometry args={[1, 12, 12]} />
+          <meshBasicMaterial color={'#00ccff'} />
+        </mesh>)
+      })}
+
       {showNodes && nodeData.map(({ position, tangent }, i) => {
-        // Depth axis: perpendicular to surface (surface normal)
+        // Depth axis: surface normal (prefer center→node radial; fallback to ring meta normal)
         let depthAxis = new THREE.Vector3(0, 1, 0)
         const center = nodeRing0?.meta?.surfaceCenter || nodeRing0?.meta?.center
         if (Array.isArray(center) && center.length === 3) {
-          // Approximate surface normal from center->node
           depthAxis = new THREE.Vector3().subVectors(position, new THREE.Vector3(center[0], center[1], center[2])).normalize()
         } else {
           const ringNormal = nodeRing0?.meta?.normal
@@ -85,21 +103,19 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
           }
         }
 
-        // Width axis: along the layerline tangent
-        const widthAxis = tangent.clone().normalize()
-
-        // Height axis: vertical direction, orthogonalized against width/depth (Gram-Schmidt)
-        const worldUp = new THREE.Vector3(0, 1, 0)
-        const heightAxisRaw = worldUp.clone()
-        const heightAxis = heightAxisRaw
-          .sub(widthAxis.clone().multiplyScalar(heightAxisRaw.dot(widthAxis)))
-          .sub(depthAxis.clone().multiplyScalar(heightAxisRaw.dot(depthAxis)))
-        if (heightAxis.lengthSq() < 1e-10) {
-          heightAxis.copy(new THREE.Vector3().crossVectors(depthAxis, widthAxis))
+        // Width axis: use tangent projected into the local plane orthogonal to depthAxis
+        let widthAxis = tangent.clone().sub(depthAxis.clone().multiplyScalar(tangent.dot(depthAxis)))
+        if (widthAxis.lengthSq() < 1e-10) {
+          // Degenerate tangent (parallel to depth). Choose any stable axis not parallel to depth
+          const arbitrary = Math.abs(depthAxis.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)
+          widthAxis = arbitrary.sub(depthAxis.clone().multiplyScalar(arbitrary.dot(depthAxis)))
         }
-        heightAxis.normalize()
+        widthAxis.normalize()
 
-        // Build orientation basis: X=width, Y=height, Z=depth
+        // Height axis: exact cross to complete right-handed orthonormal frame
+        const heightAxis = new THREE.Vector3().crossVectors(depthAxis, widthAxis).normalize()
+
+        // Build orientation basis: X=width, Y=height, Z=depth (orthonormal)
         const basis = new THREE.Matrix4().makeBasis(widthAxis, heightAxis, depthAxis)
         const quat = new THREE.Quaternion().setFromRotationMatrix(basis)
 

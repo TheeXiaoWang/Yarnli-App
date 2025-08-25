@@ -13,7 +13,7 @@
  *   plan length === currentCount, each entry is action for that current stitch
  *   inc = add one extra stitch after this stitch (→ two targets), sc = carry one, dec = merge
  */
-export function countNextStitches({ currentCount, currentCircumference, nextCircumference, yarnWidth, increaseFactor = 1.0, decreaseFactor = 1.0, spacingMode = 'even', seed = 0 }) {
+export function countNextStitches({ currentCount, currentCircumference, nextCircumference, yarnWidth, increaseFactor = 1.0, decreaseFactor = 1.0, spacingMode = 'even', incMode = null, decMode = null, seed = 0 }) {
   const cc = Math.max(1, Math.round(currentCount))
   const c0 = Math.max(1e-6, Number(currentCircumference) || 0)
   const c1 = Math.max(1e-6, Number(nextCircumference) || 0)
@@ -38,9 +38,10 @@ export function countNextStitches({ currentCount, currentCircumference, nextCirc
     return rngState / 0xffffffff
   }
 
-  const placeActions = (count, tag) => {
+  const placeActions = (count, tag, modeOverride) => {
     if (count <= 0) return
-    if (spacingMode === 'even' || count === 1) {
+    const mode = modeOverride || spacingMode || 'even'
+    if (mode === 'even' || count === 1) {
       for (let k = 0; k < count; k++) {
         const j = Math.floor((k * cc) / count)
         plan[j] = tag
@@ -98,9 +99,9 @@ export function countNextStitches({ currentCount, currentCircumference, nextCirc
   }
 
   if (delta > 0) {
-    placeActions(delta, 'inc')
+    placeActions(delta, 'inc', incMode)
   } else if (delta < 0) {
-    placeActions(-delta, 'dec')
+    placeActions(-delta, 'dec', decMode)
   }
 
   return { nextCount, plan }

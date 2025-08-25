@@ -300,6 +300,8 @@ export const useNodeStore = create((set, get) => ({
   scaffold: null,
   nextNodes: null,
   nextScaffold: null,
+  nextPoints: null,
+  nextLayersPoints: [],
   chainScaffold: [],
   stitchCounts: [],
   scaffoldCenter: null,
@@ -308,9 +310,10 @@ export const useNodeStore = create((set, get) => ({
   ui: {
     showNodes: true,
     showScaffold: true,
+    showNextPoints: false,
   },
 
-  clear: () => set({ nodes: null, scaffold: null, nextNodes: null, nextScaffold: null, chainScaffold: [], stitchCounts: [], scaffoldCenter: null, lastGeneratedAt: null }),
+  clear: () => set({ nodes: null, scaffold: null, nextNodes: null, nextScaffold: null, nextPoints: null, nextLayersPoints: [], chainScaffold: [], stitchCounts: [], scaffoldCenter: null, lastGeneratedAt: null }),
 
   setVisibility: (partial) => set((state) => ({ ui: { ...state.ui, ...partial } })),
 
@@ -436,16 +439,34 @@ export const useNodeStore = create((set, get) => ({
       try {
         const metaCenterArr = nodesResult?.nodeRing0?.meta?.center || [startCenter.x, startCenter.y, startCenter.z]
         const centerV = new THREE.Vector3(metaCenterArr[0], metaCenterArr[1], metaCenterArr[2])
-        const startY = centerV.y
+        // Build slice axis from poles to make node gen orientation-agnostic
+        let axisDir = new THREE.Vector3(0,1,0)
+        try {
+          const poles = (generated?.markers?.poles || []).map(e => Array.isArray(e) ? { p: e } : e)
+          const startP = poles.find(e => e?.role === 'start')?.p || poles[0]?.p
+          const endP = poles.find(e => e?.role === 'end')?.p || poles[1]?.p
+          if (startP && endP) {
+            axisDir = new THREE.Vector3(endP[0]-startP[0], endP[1]-startP[1], endP[2]-startP[2])
+            if (axisDir.lengthSq() > 1e-12) axisDir.normalize()
+            else axisDir.set(0,1,0)
+          }
+        } catch (_) {}
+        const startKey = axisDir.dot(centerV)
         const increaseFactor = Number.isFinite(settings?.increaseFactor) ? settings.increaseFactor : 1.0
         const decreaseFactor = Number.isFinite(settings?.decreaseFactor) ? settings.decreaseFactor : 1.0
         const spacingMode = settings?.planSpacingMode || 'even'
+        const incMode = settings?.planIncreaseMode || spacingMode
+        const decMode = settings?.planDecreaseMode || spacingMode
         const targetSpacing = Math.max(1e-6, actualStitchWidth * effectiveTightenFactor)
 
-        // Build ordered list of layers strictly below the MR
+        // Build ordered list of layers strictly below the MR; if none, fall back to above
         const layersBelow = (generated.layers || [])
-          .filter(l => Number.isFinite(l?.y) && l.y < startY)
+          .filter(l => Number.isFinite(l?.y) && l.y < startKey)
           .sort((a, b) => b.y - a.y) // top-down
+        const layersAbove = (generated.layers || [])
+          .filter(l => Number.isFinite(l?.y) && l.y > startKey)
+          .sort((a, b) => a.y - b.y) // bottom-up towards MR
+        const layersToProcess = layersBelow.length > 0 ? layersBelow : layersAbove
 
         // Initialize with MR nodes as the current ring
         let currentNodes = (nodesResult?.nodeRing0?.nodes || []).map(n => ({ p: [...n.p] }))
@@ -453,11 +474,14 @@ export const useNodeStore = create((set, get) => ({
         let currentRadius = nodesResult?.nodeRing0?.meta?.radius || 1
 
         const chainSegments = []
+        let firstStepSegments = null
+        let firstNextNodesRing = null
+        const allNextRings = []
         const countsPerLayer = []
         // Include MR layer count first
-        countsPerLayer.push({ y: startY, count: currentCount })
+        countsPerLayer.push({ y: startKey, count: currentCount })
         let prevStepSegments = null
-        for (const layer of layersBelow) {
+        for (const layer of layersToProcess) {
           const yNext = Number(layer.y)
           const rNext = averageRadiusFromPolyline(layer?.polylines?.[0], centerV) || currentRadius
           // 1) Count stitches for next layer
@@ -471,11 +495,15 @@ export const useNodeStore = create((set, get) => ({
             increaseFactor,
             decreaseFactor,
             spacingMode,
+            incMode,
+            decMode,
             seed: Math.floor(yNext * 1000),
           })
 
           // 2) Evenly distribute next layer nodes
-          const { nodes: nextNodes } = distributeNextNodes({ yNext, rNext: rNext, nextCount: Nnext, center: metaCenterArr, up: [0,1,0], handedness: effectiveHandedness })
+          const { nodes: nextNodes } = distributeNextNodes({ yNext, rNext: rNext, nextCount: Nnext, center: metaCenterArr, up: [axisDir.x, axisDir.y, axisDir.z], handedness: effectiveHandedness })
+          if (!firstNextNodesRing) firstNextNodesRing = nextNodes
+          allNextRings.push({ y: yNext, nodes: nextNodes })
 
           // 3) Build monotonic scaffold segments using the plan
           let segs = buildScaffoldSegments({ currentNodes, nextNodes, plan })
@@ -490,9 +518,14 @@ export const useNodeStore = create((set, get) => ({
                 return [a, [hit.x, hit.y, hit.z]]
               })
             : contiguous
-          const interLayer = filterInterLayerOnly(snapped)
+          let interLayer = filterInterLayerOnly(snapped)
+          // Fallback: if no segments survived (e.g., degenerate mapping), build simple radial snaps to the layer
+          if (interLayer.length === 0) {
+            interLayer = buildScaffoldSegmentsToLayer({ nodes: currentNodes }, layer, metaCenterArr, [axisDir.x, axisDir.y, axisDir.z])
+          }
           chainSegments.push(...interLayer)
           prevStepSegments = interLayer
+          if (!firstStepSegments) firstStepSegments = interLayer
           // Use snapped endpoints as the current nodes for next iteration to keep tip-to-tip on the ring
           currentNodes = interLayer.map(seg => ({ p: seg[1] }))
           currentCount = Nnext
@@ -501,8 +534,8 @@ export const useNodeStore = create((set, get) => ({
         }
 
         // Update immediate next for cyan lines (first step only)
-        const firstBatch = chainSegments.slice(0, currentNodes.length || 0)
-        set({ nextNodes: null, nextScaffold: { segments: firstBatch, meta: { center: metaCenterArr } }, chainScaffold: chainSegments, stitchCounts: countsPerLayer, scaffoldCenter: metaCenterArr })
+        const firstBatch = firstStepSegments || chainSegments.slice(0, currentNodes.length || 0)
+        set({ nextNodes: null, nextPoints: firstNextNodesRing, nextLayersPoints: allNextRings, nextScaffold: { segments: firstBatch, meta: { center: metaCenterArr } }, chainScaffold: chainSegments, stitchCounts: countsPerLayer, scaffoldCenter: metaCenterArr })
       } catch (_) { /* noop */ }
     } finally {
       set({ isGenerating: false })
