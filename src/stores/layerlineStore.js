@@ -5,6 +5,12 @@ export const useLayerlineStore = create((set, get) => ({
   settings: {
     // Crocheter-friendly inputs
     yarnSizeLevel: 4, // 1..9 (4 is normal)
+    magicRingDefaultStitches: 6,
+    tightenFactor: 1.0,
+    increaseFactor: 1.0, // scales increases derived from circumference ratio
+    decreaseFactor: 1.0, // scales decreases when circumference shrinks
+    planSpacingMode: 'even', // 'even' | 'jagged'
+    showFullScaffold: false,
 
     // Advanced/legacy (still supported by generators if provided)
     layerHeight: 0.2,
