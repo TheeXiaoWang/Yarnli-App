@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, PerformanceMonitor, AdaptiveDpr, AdaptiveEvents, Preload, GizmoHelper, GizmoViewcube } from '@react-three/drei'
 import YarnStage from './components/YarnStage'
 import ResolutionModal from './components/ResolutionModal'
@@ -8,10 +8,12 @@ import Scene3D from './components/Scene3D'
 import TopToolbar from './components/TopToolbar'
 import LeftSidebar from './components/LeftSidebar'
 import RightSidebar from './components/RightSidebar'
+import { useNodeStore } from './stores/nodeStore'
 import StatusBar from './components/StatusBar'
 import { useSceneStore } from './stores/sceneStore'
 import { TransformProvider, useTransformMode } from './contexts/TransformContext'
 import * as THREE from 'three'
+import { useLayerlineStore } from './stores/layerlineStore'
 
 function App() {
   const { objects, selectedObject, undo, redo } = useSceneStore()
@@ -155,6 +157,7 @@ function App() {
           
           {/* Status Bar */}
           <StatusBar />
+          <OverlaySliders />
           <ResolutionModal 
             open={showRes}
             onClose={() => setShowRes(false)}
@@ -182,23 +185,17 @@ function OrbitControlsWrapper() {
   // Expose for GizmoHelper onUpdate fallback
   React.useEffect(()=>{ window.__orbitControlsRef = controlsRef; return () => { if (window.__orbitControlsRef===controlsRef) delete window.__orbitControlsRef } },[])
 
-  React.useEffect(() => {
+  // Pure clamp once per frame to avoid recursive change/update loops
+  const clampBusyRef = React.useRef(false)
+  useFrame(() => {
     const c = controlsRef.current
-    if (!c) return
-    const keepAboveGround = () => {
-      const eps = 0.001
-      const liftTarget = c.target.y < eps ? eps - c.target.y : 0
-      const liftCamera = c.object.position.y < eps ? eps - c.object.position.y : 0
-      const dy = Math.max(liftTarget, liftCamera)
-      if (dy > 0) {
-        c.target.y += dy
-        c.object.position.y += dy
-        c.update()
-      }
-    }
-    c.addEventListener('change', keepAboveGround)
-    return () => c.removeEventListener('change', keepAboveGround)
-  }, [])
+    if (!c || clampBusyRef.current) return
+    clampBusyRef.current = true
+    const eps = 0.001
+    if (c.object.position.y < eps) c.object.position.y = eps
+    if (c.target.y < eps) c.target.y = eps
+    clampBusyRef.current = false
+  })
 
   return (
     <OrbitControls
@@ -226,3 +223,40 @@ function OrbitControlsWrapper() {
 }
 
 export default App
+
+function OverlaySliders() {
+  const { generated } = useLayerlineStore()
+  const { nodes, transitionOps, ui, setVisibility, nextLayersPoints } = useNodeStore()
+  const maxLayers = (nextLayersPoints?.length || 0)
+  let lastLayerNodes = 0
+  const layerVisible = ui.nodeLayerVisibleCount || 0
+  if (layerVisible > 0 && nextLayersPoints && nextLayersPoints.length > 0) {
+    const idx = Math.min(layerVisible - 1, nextLayersPoints.length - 1)
+    lastLayerNodes = nextLayersPoints[idx]?.nodes?.length || 0
+  } else {
+    lastLayerNodes = nodes?.nodes?.length || 0
+  }
+  return (
+    <div>
+      {/* Right-side vertical slider: Visible node layers (only) */}
+      <input 
+        type="range" 
+        min={0} 
+        max={Math.max(0, maxLayers)} 
+        value={Math.min(ui.nodeLayerVisibleCount || 0, Math.max(0, maxLayers))}
+        onChange={(e)=>setVisibility({ nodeLayerVisibleCount: Number(e.target.value) })}
+        style={{ position:'fixed', right:48, top:'50%', transform:'translateY(-50%) rotate(270deg)', width:'40vh', zIndex:1000 }}
+      />
+
+      {/* Bottom-centered horizontal slider: Node index path */}
+      <input 
+        type="range" 
+        min={0} 
+        max={Math.max(1, lastLayerNodes)} 
+        value={Math.min(ui.nodeVisibleCount || 1, Math.max(1, lastLayerNodes))}
+        onChange={(e)=>setVisibility({ nodeVisibleCount: Number(e.target.value) })}
+        style={{ position:'fixed', left:'50%', transform:'translateX(-50%)', bottom:16, width:'40vw', zIndex:1000 }}
+      />
+    </div>
+  )
+}

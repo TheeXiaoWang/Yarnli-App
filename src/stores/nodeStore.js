@@ -1,299 +1,16 @@
 import { create } from 'zustand'
 import * as THREE from 'three'
 import { computeStitchDimensions } from '../layerlines/stitches'
-import { magicRing } from '../nodes/initial'
+import { magicRing, firstLayerPlanner } from '../nodes/initial'
 import { computeOvalChainScaffold } from '../nodes/ovalChainScaffold'
-import { countNextStitches, distributeNextNodes, buildScaffoldSegments } from '../nodes/transitions'
+import { planScaffoldChain, planScaffoldChainV2, distributeNextNodes, countNextStitches } from '../services/scaffoldPipeline'
+import { useLayerlineStore } from './layerlineStore'
 import { detectOvalStart } from '../layerlines/pipeline/index.js'
+import { computeStitchGaugeFromSettings } from '../services/stitches/computeGauge'
 import { STITCH_TYPES } from '../constants/stitchTypes'
 import { intersectWithPlane, nearestPointOnPolyline } from '../components/measurements/utils'
-
-function deriveStartAndNormal(markers) {
-  let start = null
-  let end = null
-  const poles = markers?.poles || []
-  for (const entry of poles) {
-    if (Array.isArray(entry)) {
-      if (!start) start = new THREE.Vector3(entry[0], entry[1], entry[2])
-      else if (!end) end = new THREE.Vector3(entry[0], entry[1], entry[2])
-    } else if (entry && entry.p) {
-      const v = new THREE.Vector3(entry.p[0], entry.p[1], entry.p[2])
-      if (entry.role === 'start') start = v
-      else if (entry.role === 'end') end = v
-      else if (!start) start = v
-      else if (!end) end = v
-    }
-  }
-  if (!start) start = new THREE.Vector3(0, 0, 0)
-  let normal = new THREE.Vector3(0, 1, 0)
-  if (end) {
-    normal = new THREE.Vector3().subVectors(end, start)
-    if (normal.lengthSq() < 1e-12) normal.set(0, 1, 0)
-    normal.normalize()
-  }
-  return { startCenter: start, endCenter: end, ringPlaneNormal: normal }
-}
-
-function estimateR0FromRing0(markers, center) {
-  const ring0 = markers?.ring0
-  const poly = Array.isArray(ring0) && ring0.length > 0 ? ring0[0] : null
-  if (!poly || poly.length === 0) return null
-  const c = center
-  let sum = 0
-  let count = 0
-  for (const p of poly) {
-    if (!Array.isArray(p) || p.length < 3) continue
-    const v = new THREE.Vector3(p[0], p[1], p[2])
-    const dx = v.x - c.x
-    const dz = v.z - c.z
-    sum += Math.hypot(dx, dz)
-    count++
-  }
-  if (count === 0) return null
-  return sum / count
-}
-
-function averageRadiusFromPolyline(poly, center) {
-  if (!Array.isArray(poly) || poly.length === 0) return null
-  const c = center
-  let sum = 0
-  let count = 0
-  for (const p of poly) {
-    if (!Array.isArray(p) || p.length < 3) continue
-    const v = new THREE.Vector3(p[0], p[1], p[2])
-    const dx = v.x - c.x
-    const dz = v.z - c.z
-    sum += Math.hypot(dx, dz)
-    count++
-  }
-  if (count === 0) return null
-  return sum / count
-}
-
-function sampleRadiusAtY(layers, yTarget, center) {
-  if (!Array.isArray(layers) || layers.length === 0) return null
-  let best = null
-  let bestDy = Infinity
-  for (const l of layers) {
-    const y = Number(l?.y)
-    if (!Number.isFinite(y)) continue
-    const dy = Math.abs(y - yTarget)
-    if (dy < bestDy) { bestDy = dy; best = l }
-  }
-  const poly = best?.polylines?.[0]
-  return averageRadiusFromPolyline(poly, center)
-}
-
-function findLayerBelow(layers, yCurrent) {
-  if (!Array.isArray(layers) || layers.length === 0) return null
-  let best = null
-  let bestDy = Infinity
-  for (const l of layers) {
-    const y = Number(l?.y)
-    if (!Number.isFinite(y)) continue
-    if (y >= yCurrent) continue
-    const dy = yCurrent - y
-    if (dy < bestDy) { bestDy = dy; best = l }
-  }
-  return best
-}
-
-function findLayerAtLeastBelow(layers, yCurrent, minDeltaY) {
-  if (!Array.isArray(layers) || layers.length === 0) return null
-  let candidate = null
-  let bestDy = Infinity
-  for (const l of layers) {
-    const y = Number(l?.y)
-    if (!Number.isFinite(y)) continue
-    if (y > yCurrent - minDeltaY) continue
-    const dy = yCurrent - y
-    if (dy < bestDy) { bestDy = dy; candidate = l }
-  }
-  return candidate || findLayerBelow(layers, yCurrent)
-}
-
-function findImmediateLayerBelow(layers, yCurrent) {
-  if (!Array.isArray(layers) || layers.length === 0) return null
-  const eps = 1e-6
-  let best = null
-  let minDy = Infinity
-  for (const l of layers) {
-    const y = Number(l?.y)
-    if (!Number.isFinite(y)) continue
-    const dy = yCurrent - y
-    if (dy > eps && dy < minDy) { minDy = dy; best = l }
-  }
-  return best
-}
-
-function buildScaffoldSegmentsToLayer(currentNodes, nextLayer, center, normal) {
-  if (!currentNodes || !Array.isArray(currentNodes.nodes) || !nextLayer) return []
-  const poly = nextLayer?.polylines?.[0]
-  if (!Array.isArray(poly) || poly.length < 2) return []
-  const c = Array.isArray(center) ? new THREE.Vector3(center[0], center[1], center[2]) : (center.clone ? center.clone() : new THREE.Vector3(0,0,0))
-  const n = Array.isArray(normal) ? new THREE.Vector3(normal[0], normal[1], normal[2]) : (normal.clone ? normal.clone() : new THREE.Vector3(0,1,0))
-  const segs = []
-  for (const node of currentNodes.nodes) {
-    const p = new THREE.Vector3(node.p[0], node.p[1], node.p[2])
-    const dir = p.clone().sub(c)
-    dir.y = 0 // prefer azimuth direction around the axis
-    if (dir.lengthSq() < 1e-12) dir.set(1,0,0)
-    dir.normalize()
-    const planeNormal = new THREE.Vector3().crossVectors(n, dir).normalize()
-    let q = intersectWithPlane(nextLayer, c, planeNormal, dir, null)
-    if (!q) {
-      q = nearestPointOnPolyline(nextLayer, p) || p
-    }
-    segs.push([node.p, [q.x, q.y, q.z]])
-  }
-  return segs
-}
-
-function snapOnLayerByTheta(layer, center, up, theta) {
-  const C = Array.isArray(center) ? new THREE.Vector3(center[0], center[1], center[2]) : center.clone()
-  const n = (Array.isArray(up) ? new THREE.Vector3(up[0], up[1], up[2]) : up.clone()).normalize()
-  // Build azimuth basis u,v
-  let u = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)
-  u.sub(n.clone().multiplyScalar(u.dot(n))).normalize()
-  const v = new THREE.Vector3().crossVectors(n, u)
-  const dir = u.clone().multiplyScalar(Math.cos(theta)).add(v.clone().multiplyScalar(Math.sin(theta))).normalize()
-  const planeNormal = new THREE.Vector3().crossVectors(n, dir).normalize()
-  const hit = intersectWithPlane(layer, C, planeNormal, dir, null)
-  if (hit) return hit
-  const approx = nearestPointOnPolyline(layer, C.clone().add(dir))
-  return approx || C
-}
-
-function monotonicBuckets(curN, nxtN, maxBranchesPerStitch = 1) {
-  const buckets = Array.from({ length: curN }, () => [])
-  const boundary = []
-  for (let j = 0; j <= curN; j++) boundary[j] = Math.round((j * nxtN) / curN)
-  for (let j = 0; j < curN; j++) {
-    let kStart = boundary[j]
-    let kEnd = boundary[j + 1] - 1
-    if (kEnd < kStart) continue
-    kEnd = Math.min(kStart + maxBranchesPerStitch, kEnd)
-    for (let k = kStart; k <= kEnd; k++) buckets[j].push(k)
-  }
-  return buckets
-}
-
-function enforceStepContinuity(prevSegs, currSegs) {
-  if (!Array.isArray(prevSegs) || prevSegs.length === 0) return currSegs
-  if (!Array.isArray(currSegs) || currSegs.length === 0) return currSegs
-  const prevEnds = prevSegs.map((s) => s[1])
-  const used = new Array(prevEnds.length).fill(false)
-  const adjusted = []
-  for (let i = 0; i < currSegs.length; i++) {
-    const start = currSegs[i][0]
-    let best = -1
-    let bestD2 = Infinity
-    for (let j = 0; j < prevEnds.length; j++) {
-      if (used[j]) continue
-      const e = prevEnds[j]
-      const dx = start[0] - e[0]
-      const dy = start[1] - e[1]
-      const dz = start[2] - e[2]
-      const d2 = dx*dx + dy*dy + dz*dz
-      if (d2 < bestD2) { bestD2 = d2; best = j }
-    }
-    if (best >= 0) {
-      used[best] = true
-      adjusted.push([prevEnds[best], currSegs[i][1]])
-    } else {
-      adjusted.push(currSegs[i])
-    }
-  }
-  return adjusted
-}
-
-function normalizeAngle(a) {
-  const twoPi = Math.PI * 2
-  while (a < 0) a += twoPi
-  while (a >= twoPi) a -= twoPi
-  return a
-}
-
-function computeOrderedAngles(points, center) {
-  const C = Array.isArray(center) ? new THREE.Vector3(center[0], center[1], center[2]) : center.clone()
-  const arr = points.map((p, idx) => {
-    const v = new THREE.Vector3(p[0]-C.x, 0, p[2]-C.z)
-    const theta = Math.atan2(v.z, v.x)
-    return { idx, theta: normalizeAngle(theta), p }
-  })
-  arr.sort((a, b) => a.theta - b.theta)
-  return arr
-}
-
-function angleSpan(a, b) {
-  // positive arc from a to b in [0,2π)
-  let d = b - a
-  const twoPi = Math.PI * 2
-  if (d < 0) d += twoPi
-  return d
-}
-
-function filterInterLayerOnly(segs, minDeltaY = 1e-4) {
-  if (!Array.isArray(segs)) return []
-  return segs.filter(([a, b]) => Math.abs(a[1] - b[1]) >= minDeltaY)
-}
-
-function pickRingClosestToPoint(layers, point) {
-  if (!Array.isArray(layers) || layers.length === 0 || !point) return null
-  let best = null
-  let bestD = Infinity
-  for (const l of layers) {
-    const poly = l?.polylines?.[0]
-    if (!poly || poly.length === 0) continue
-    const mid = poly[Math.floor(poly.length / 2)]
-    const v = new THREE.Vector3(mid[0], mid[1], mid[2])
-    const d = v.distanceTo(point)
-    if (d < bestD) { bestD = d; best = { poly, layer: l } }
-  }
-  return best
-}
-
-function pickNextRingByDistance(layers, point, firstPoly) {
-  if (!Array.isArray(layers) || layers.length === 0 || !point) return null
-  const entries = []
-  for (const l of layers) {
-    const poly = l?.polylines?.[0]
-    if (!poly || poly.length === 0) continue
-    const mid = poly[Math.floor(poly.length / 2)]
-    const v = new THREE.Vector3(mid[0], mid[1], mid[2])
-    const d = v.distanceTo(point)
-    entries.push({ d, poly, layer: l })
-  }
-  entries.sort((a, b) => a.d - b.d)
-  if (entries.length < 2) return null
-  // First is closest; we want the next outward different poly
-  for (let i = 0; i < entries.length; i++) {
-    const e = entries[i]
-    if (e.poly !== firstPoly) return e
-  }
-  return entries[1] || null
-}
-
-// Enhanced function to get the first layer ring for Magic Ring scaffolding
-function getFirstLayerRing(layers, startCenter) {
-  if (!Array.isArray(layers) || layers.length === 0 || !startCenter) return null
-  
-  // First try to get the closest ring to the start center
-  const closestRing = pickRingClosestToPoint(layers, startCenter)
-  if (closestRing && closestRing.poly && closestRing.poly.length >= 3) {
-    return closestRing.poly
-  }
-  
-  // Fallback: use the first available layer
-  for (const layer of layers) {
-    const poly = layer?.polylines?.[0]
-    if (poly && poly.length >= 3) {
-      return poly
-    }
-  }
-  
-  return null
-}
+import { estimateR0FromRing0, averageRadiusFromPolyline, sampleRadiusAtY, buildScaffoldSegmentsToLayer, snapOnLayerByTheta, monotonicBuckets, enforceStepContinuity, normalizeAngle, computeOrderedAngles, angleSpan, filterInterLayerOnly, alignRingByAzimuth } from '../utils/nodes'
+import { findLayerBelow, findLayerAtLeastBelow, findImmediateLayerBelow, pickRingClosestToPoint, pickNextRingByDistance, getFirstLayerRing, deriveStartAndNormal } from '../utils/layers'
 
 export const useNodeStore = create((set, get) => ({
   nodes: null,
@@ -302,18 +19,29 @@ export const useNodeStore = create((set, get) => ({
   nextScaffold: null,
   nextPoints: null,
   nextLayersPoints: [],
+  spacingPerLayer: [],
+  transitionOps: [],
   chainScaffold: [],
+  chainScaffoldByLayer: [],
   stitchCounts: [],
   scaffoldCenter: null,
+  nodeChildPath: [],
   isGenerating: false,
   lastGeneratedAt: null,
   ui: {
     showNodes: true,
     showScaffold: true,
-    showNextPoints: false,
+    showNodePoints: false,
+    showSpacing: false,
+    showIncDec: false,
+    showNodeIndices: false,
+    visibleLayerCount: 999,
+    nodePathIndex: -1, // legacy: path filtering (not used by new sliders)
+    nodeLayerVisibleCount: 0, // how many node layers to show (cyan rings)
+    nodeVisibleCount: 1, // how many nodes to show on the last visible node layer (min 1)
   },
 
-  clear: () => set({ nodes: null, scaffold: null, nextNodes: null, nextScaffold: null, nextPoints: null, nextLayersPoints: [], chainScaffold: [], stitchCounts: [], scaffoldCenter: null, lastGeneratedAt: null }),
+  clear: () => set({ nodes: null, scaffold: null, nextNodes: null, nextScaffold: null, nextPoints: null, nextLayersPoints: [], spacingPerLayer: [], transitionOps: [], chainScaffold: [], chainScaffoldByLayer: [], stitchCounts: [], scaffoldCenter: null, nodeChildPath: [], lastGeneratedAt: null }),
 
   setVisibility: (partial) => set((state) => ({ ui: { ...state.ui, ...partial } })),
 
@@ -360,7 +88,7 @@ export const useNodeStore = create((set, get) => ({
       const effectiveHandedness = settings?.handedness || handedness
       const effectiveTightenFactor = Number.isFinite(settings?.tightenFactor) ? settings.tightenFactor : tightenFactor
 
-      // Module 1: count (this may be overridden by settings for a clean circular MR)
+      // Module 1: count (this may be overridden by planner/settings)
       let mrCountResult = magicRing.computeMagicRingCount({
         layerYs,
         getRadiusAtY,
@@ -371,13 +99,26 @@ export const useNodeStore = create((set, get) => ({
         handedness: effectiveHandedness,
       })
 
-      // If we're not in an oval start case, clamp to a sane default count for a magic ring
-      const defaultS = Number.isFinite(settings?.magicRingDefaultStitches) ? Math.max(3, Math.round(settings.magicRingDefaultStitches)) : 6
+      // First-layer planning: choose S0 and anchor from the real first ring when available
+      const plan = firstLayerPlanner({
+        layers: generated.layers,
+        firstRing: firstLayerRing,
+        startCenter,
+        endCenter,
+        ringPlaneNormal,
+        stitchGauge: stitchGaugeWithType,
+        tightenFactor: effectiveTightenFactor,
+      })
+      // Allow explicit override via settings; else use planner S0
+      const plannedS = Math.max(3, Math.round(Number(plan?.S0) || 0))
+      const forcedS = Number.isFinite(settings?.magicRingDefaultStitches)
+        ? Math.max(3, Math.round(settings.magicRingDefaultStitches))
+        : (plannedS > 0 ? plannedS : 6)
       mrCountResult = {
         ...mrCountResult,
         magicRing: {
           ...mrCountResult.magicRing,
-          stitchCount: defaultS,
+          stitchCount: forcedS,
         },
       }
 
@@ -403,7 +144,7 @@ export const useNodeStore = create((set, get) => ({
           tightenFactor: effectiveTightenFactor,
           firstRing, // always project to first layer
           nextRing,
-          overrideStitchCount: defaultS,
+          overrideStitchCount: forcedS,
         })
       }
 
@@ -441,6 +182,7 @@ export const useNodeStore = create((set, get) => ({
         const centerV = new THREE.Vector3(metaCenterArr[0], metaCenterArr[1], metaCenterArr[2])
         // Build slice axis from poles to make node gen orientation-agnostic
         let axisDir = new THREE.Vector3(0,1,0)
+        let axisOrigin = centerV.clone()
         try {
           const poles = (generated?.markers?.poles || []).map(e => Array.isArray(e) ? { p: e } : e)
           const startP = poles.find(e => e?.role === 'start')?.p || poles[0]?.p
@@ -449,9 +191,10 @@ export const useNodeStore = create((set, get) => ({
             axisDir = new THREE.Vector3(endP[0]-startP[0], endP[1]-startP[1], endP[2]-startP[2])
             if (axisDir.lengthSq() > 1e-12) axisDir.normalize()
             else axisDir.set(0,1,0)
+            axisOrigin = new THREE.Vector3(startP[0], startP[1], startP[2])
           }
         } catch (_) {}
-        const startKey = axisDir.dot(centerV)
+        const startKey = axisDir.dot(centerV.clone().sub(axisOrigin))
         const increaseFactor = Number.isFinite(settings?.increaseFactor) ? settings.increaseFactor : 1.0
         const decreaseFactor = Number.isFinite(settings?.decreaseFactor) ? settings.decreaseFactor : 1.0
         const spacingMode = settings?.planSpacingMode || 'even'
@@ -459,84 +202,111 @@ export const useNodeStore = create((set, get) => ({
         const decMode = settings?.planDecreaseMode || spacingMode
         const targetSpacing = Math.max(1e-6, actualStitchWidth * effectiveTightenFactor)
 
-        // Build ordered list of layers strictly below the MR; if none, fall back to above
-        const layersBelow = (generated.layers || [])
-          .filter(l => Number.isFinite(l?.y) && l.y < startKey)
-          .sort((a, b) => b.y - a.y) // top-down
-        const layersAbove = (generated.layers || [])
-          .filter(l => Number.isFinite(l?.y) && l.y > startKey)
-          .sort((a, b) => a.y - b.y) // bottom-up towards MR
-        const layersToProcess = layersBelow.length > 0 ? layersBelow : layersAbove
+        // Use centralized scaffold pipeline path below
 
-        // Initialize with MR nodes as the current ring
-        let currentNodes = (nodesResult?.nodeRing0?.nodes || []).map(n => ({ p: [...n.p] }))
-        let currentCount = currentNodes.length
-        let currentRadius = nodesResult?.nodeRing0?.meta?.radius || 1
-
-        const chainSegments = []
-        let firstStepSegments = null
-        let firstNextNodesRing = null
-        const allNextRings = []
-        const countsPerLayer = []
-        // Include MR layer count first
-        countsPerLayer.push({ y: startKey, count: currentCount })
-        let prevStepSegments = null
-        for (const layer of layersToProcess) {
-          const yNext = Number(layer.y)
-          const rNext = averageRadiusFromPolyline(layer?.polylines?.[0], centerV) || currentRadius
-          // 1) Count stitches for next layer
-          const curCirc = 2 * Math.PI * currentRadius
-          const nextCirc = 2 * Math.PI * rNext
-          const { nextCount: Nnext, plan } = countNextStitches({
-            currentCount: currentCount,
-            currentCircumference: curCirc,
-            nextCircumference: nextCirc,
-            yarnWidth: targetSpacing,
-            increaseFactor,
-            decreaseFactor,
-            spacingMode,
-            incMode,
-            decMode,
-            seed: Math.floor(yNext * 1000),
+        // Build ordered list of layers using axis projection (not world-Y)
+        const layersWithKey = (generated.layers || []).map((l) => {
+          const poly = l?.polylines?.[0]
+          let mid = null
+          if (Array.isArray(poly) && poly.length > 0) mid = poly[Math.floor(poly.length / 2)]
+          const v = mid ? new THREE.Vector3(mid[0], mid[1], mid[2]) : new THREE.Vector3(0, 0, 0)
+          const key = axisDir.dot(v.clone().sub(axisOrigin))
+          return { layer: l, __key: key }
+        })
+        const epsKey = 1e-6
+        const layersBelow = layersWithKey
+          .filter(e => Number.isFinite(e.__key) && e.__key < startKey)
+          .sort((a, b) => b.__key - a.__key) // nearest below first
+          .map(e => e.layer)
+        const layersAbove = layersWithKey
+          .filter(e => Number.isFinite(e.__key) && e.__key > startKey)
+          .sort((a, b) => a.__key - b.__key) // nearest above first
+          .map(e => e.layer)
+        // Explicitly skip any layer whose key is ~equal to the anchor (avoid duplicate first layer)
+        let layersToProcess = (layersBelow.length > 0 ? layersBelow : layersAbove)
+          .filter(l => {
+            const poly = l?.polylines?.[0]
+            if (!poly || poly.length === 0) return true
+            const mid = poly[Math.floor(poly.length / 2)]
+            const v = new THREE.Vector3(mid[0], mid[1], mid[2])
+            const key = axisDir.dot(v.clone().sub(axisOrigin))
+            return Math.abs(key - startKey) > epsKey
           })
-
-          // 2) Evenly distribute next layer nodes
-          const { nodes: nextNodes } = distributeNextNodes({ yNext, rNext: rNext, nextCount: Nnext, center: metaCenterArr, up: [axisDir.x, axisDir.y, axisDir.z], handedness: effectiveHandedness })
-          if (!firstNextNodesRing) firstNextNodesRing = nextNodes
-          allNextRings.push({ y: yNext, nodes: nextNodes })
-
-          // 3) Build monotonic scaffold segments using the plan
-          let segs = buildScaffoldSegments({ currentNodes, nextNodes, plan })
-
-          // Enforce continuity from the previous step (tip-to-tip)
-          const contiguous = enforceStepContinuity(prevStepSegments, segs)
-          // Snap endpoints to the actual layer polyline to avoid drift from ideal circle
-          const snapped = (layer?.polylines?.[0])
-            ? contiguous.map(([a,b]) => {
-                const vec = new THREE.Vector3(b[0], b[1], b[2])
-                const hit = nearestPointOnPolyline(layer, vec) || vec
-                return [a, [hit.x, hit.y, hit.z]]
-              })
-            : contiguous
-          let interLayer = filterInterLayerOnly(snapped)
-          // Fallback: if no segments survived (e.g., degenerate mapping), build simple radial snaps to the layer
-          if (interLayer.length === 0) {
-            interLayer = buildScaffoldSegmentsToLayer({ nodes: currentNodes }, layer, metaCenterArr, [axisDir.x, axisDir.y, axisDir.z])
-          }
-          chainSegments.push(...interLayer)
-          prevStepSegments = interLayer
-          if (!firstStepSegments) firstStepSegments = interLayer
-          // Use snapped endpoints as the current nodes for next iteration to keep tip-to-tip on the ring
-          currentNodes = interLayer.map(seg => ({ p: seg[1] }))
-          currentCount = Nnext
-          currentRadius = rNext
-          countsPerLayer.push({ y: yNext, count: Nnext })
+        if (!layersToProcess || layersToProcess.length <= 1) {
+          // Fallback: order by world-Y relative to start center, descending (nearest first)
+          const y0w = startCenter.y
+          const belowY = (generated.layers || []).filter(l => Number.isFinite(l?.y) && l.y < y0w).sort((a,b) => b.y - a.y)
+          const aboveY = (generated.layers || []).filter(l => Number.isFinite(l?.y) && l.y > y0w).sort((a,b) => a.y - b.y)
+          layersToProcess = (belowY.length > 0 ? belowY : aboveY)
+            .filter(l => {
+              const poly = l?.polylines?.[0]
+              if (!poly || poly.length === 0) return true
+              const mid = poly[Math.floor(poly.length / 2)]
+              const v = new THREE.Vector3(mid[0], mid[1], mid[2])
+              const key = axisDir.dot(v.clone().sub(axisOrigin))
+              return Math.abs(key - startKey) > epsKey
+            })
         }
 
+        // Initialize with FIRST LAYER nodes (endpoints of MR scaffold) to avoid duplicating MR->Layer0 step
+        const initialRing = (nodesResult?.scaffold?.segments && nodesResult.scaffold.segments.length > 0)
+          ? nodesResult.scaffold.segments.map(seg => ({ p: [...seg[1]] }))
+          : (nodesResult?.nodeRing0?.nodes || []).map(n => ({ p: [...n.p] }))
+        const layersToPlan = Array.isArray(layersToProcess) ? layersToProcess : []
+        const globalSettings = useLayerlineStore.getState()?.settings || {}
+        // Prefer the latest global setting first, then local override, then default
+        const version = (globalSettings.scaffoldVersion ?? settings?.scaffoldVersion ?? 'v1')
+        const planner = (version === 'v2') ? planScaffoldChainV2 : planScaffoldChain
+        // eslint-disable-next-line no-console
+        console.log('[ScaffoldPlanner]', version === 'v2' ? 'V2' : 'V1')
+        const { chainSegments, chainByLayer, childMaps, allNextRings, firstNextNodesRing } = planner({
+          layers: layersToPlan,
+          startKey,
+          centerV,
+          axisDir,
+          currentNodes: initialRing,
+          distributeNextNodes: (args) => distributeNextNodes({ ...args, center: metaCenterArr, up: [axisDir.x, axisDir.y, axisDir.z], handedness: effectiveHandedness }),
+          countNextStitches,
+          targetSpacing,
+          increaseFactor,
+          decreaseFactor,
+          incMode,
+          decMode,
+          spacingMode,
+        })
+        const spacingPerLayer = allNextRings.map((entry) => {
+          const nodes = entry.nodes
+          if (!nodes || nodes.length < 2) return { y: entry.y, spacing: 0, p: metaCenterArr }
+          let total = 0
+          for (let i = 0; i < nodes.length; i++) {
+            const a = nodes[i].p
+            const b = nodes[(i + 1) % nodes.length].p
+            total += Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2])
+          }
+          return { y: entry.y, spacing: total / nodes.length, p: nodes[0].p }
+        })
+        const countsPerLayer = [{ y: startKey, count: initialRing.length }, ...allNextRings.map((e) => ({ y: e.y, count: e.nodes.length }))]
+        const transitionOps = []
+
         // Update immediate next for cyan lines (first step only)
-        const firstBatch = firstStepSegments || chainSegments.slice(0, currentNodes.length || 0)
-        set({ nextNodes: null, nextPoints: firstNextNodesRing, nextLayersPoints: allNextRings, nextScaffold: { segments: firstBatch, meta: { center: metaCenterArr } }, chainScaffold: chainSegments, stitchCounts: countsPerLayer, scaffoldCenter: metaCenterArr })
-      } catch (_) { /* noop */ }
+        const firstBatch = chainByLayer?.[0]?.segments || []
+        // eslint-disable-next-line no-console
+        console.log('[ChainScaffold] segments total:', chainSegments.length, 'byLayer:', chainByLayer.length)
+        // Build a labeled, human-readable series including StartPole -> Layer0
+        const s0 = (nodesResult?.nodeRing0?.nodes || []).length
+        const startToL0 = { label: 'StartPole -> Layer0', y: startKey, fromCount: 1, toCount: s0, map: [{ from: 0, children: Array.from({ length: s0 }, (_, i) => i) }] }
+        const labeled = [startToL0, ...childMaps.map((e, i) => ({ ...e, label: `Layer${i} -> Layer${i + 1}` }))]
+        // eslint-disable-next-line no-console
+        console.log('[NodeChildPath]', labeled)
+        // Include StartPole -> Layer0 as an initial step for UI sliders
+        const startToFirstLayerEntry = { y: startKey, segments: nodesResult?.scaffold?.segments || [] }
+        const chainByLayerWithStart = [startToFirstLayerEntry, ...chainByLayer]
+        const chainAllWithStart = [ ...(nodesResult?.scaffold?.segments || []), ...chainSegments ]
+        set({ nextNodes: null, nextPoints: firstNextNodesRing, nextLayersPoints: allNextRings, spacingPerLayer, transitionOps, nextScaffold: { segments: firstBatch, meta: { center: metaCenterArr } }, chainScaffold: chainAllWithStart, chainScaffoldByLayer: chainByLayerWithStart, stitchCounts: countsPerLayer, scaffoldCenter: metaCenterArr, nodeChildPath: labeled })
+      } catch (err) { 
+        // eslint-disable-next-line no-console
+        console.error('[ChainScaffold] generation failed:', err)
+      }
     } finally {
       set({ isGenerating: false })
     }

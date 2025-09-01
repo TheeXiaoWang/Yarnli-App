@@ -19,11 +19,27 @@ export function countNextStitches({ currentCount, currentCircumference, nextCirc
   const c1 = Math.max(1e-6, Number(nextCircumference) || 0)
   const w = Math.max(1e-6, Number(yarnWidth) || 0)
 
-  // Desired count based on spacing rule
-  const raw = (c1 / w)
+  // Half-up rounding helper to avoid 10.49 → 11, require ≥ .5
+  const EPS = 1e-9
+  const halfUp = (x) => Math.floor(x + 0.5 - EPS)
+
+  // Desired count based on spacing rule (in stitch units)
+  const base = (c1 / w)
   const factor = c1 >= c0 ? increaseFactor : decreaseFactor
-  const desired = Math.round(raw * factor)
-  let nextCount = Math.max(1, desired)
+  const desired = base * factor
+
+  // Half-up rounded target
+  let target = Math.max(1, halfUp(desired))
+
+  // Directional clamp: do not increase when circumference shrinks, and vice versa
+  let nextCount
+  if (c1 < c0) {
+    nextCount = Math.min(cc, target)
+  } else if (c1 > c0) {
+    nextCount = Math.max(cc, target)
+  } else {
+    nextCount = cc
+  }
 
   // Compute delta vs current
   const delta = nextCount - cc

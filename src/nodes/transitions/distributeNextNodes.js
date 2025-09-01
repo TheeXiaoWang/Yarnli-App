@@ -19,6 +19,8 @@ export function distributeNextNodes({ yNext, rNext, nextCount, center = [0, yNex
     const t = i * step
     const ca = Math.cos(t), sa = Math.sin(t)
     const P = C.clone().add(u.clone().multiplyScalar(rNext * ca)).add(v.clone().multiplyScalar(rNext * sa))
+    // Ensure points lie on the target layer's world-height; prevents flattening to MR plane
+    P.y = yNext
     nodes.push({ p: [P.x, P.y, P.z], theta: t })
   }
   return { nodes, center: [C.x, C.y, C.z] }

@@ -9,24 +9,35 @@ const LeftSidebar = () => {
   const [scaleValues, setScaleValues] = useState({ x: 1, y: 1, z: 1 })
   const [positionValues, setPositionValues] = useState({ x: 0, y: 0, z: 0 })
   const [rotationValues, setRotationValues] = useState({ x: 0, y: 0, z: 0 })
+  const [focusedField, setFocusedField] = useState(null)
+
+  // Numeric helpers: snap to step and remove floating artifacts (e.g., 5.300000000000001 → 5.3)
+  const sanitizeNumber = (value, step = 0.1, decimals = 6) => {
+    const num = Math.abs(parseFloat(value) || 0)
+    const snapped = step > 0 ? Math.round(num / step) * step : num
+    let s = snapped.toFixed(decimals)
+    s = s.replace(/(\.\d*?[1-9])0+$/,'$1').replace(/\.0+$/,'')
+    return Number(s)
+  }
 
   // Update local state when selected object changes
   React.useEffect(() => {
     if (selectedObject) {
       setScaleValues({
-        x: selectedObject.scale[0],
-        y: selectedObject.scale[1],
-        z: selectedObject.scale[2]
+        x: sanitizeNumber(selectedObject.scale[0], 0.1, 6),
+        y: sanitizeNumber(selectedObject.scale[1], 0.1, 6),
+        z: sanitizeNumber(selectedObject.scale[2], 0.1, 6)
       })
+      const fmt = (n) => sanitizeNumber(n, 0.1, 6)
       setPositionValues({
-        x: Number(selectedObject.position[0].toFixed(1)),
-        y: Number(selectedObject.position[1].toFixed(1)),
-        z: Number(selectedObject.position[2].toFixed(1))
+        x: fmt(selectedObject.position[0]),
+        y: fmt(selectedObject.position[1]),
+        z: fmt(selectedObject.position[2])
       })
       setRotationValues({
-        x: selectedObject.rotation[0],
-        y: selectedObject.rotation[1],
-        z: selectedObject.rotation[2]
+        x: sanitizeNumber(selectedObject.rotation[0], 1, 3),
+        y: sanitizeNumber(selectedObject.rotation[1], 1, 3),
+        z: sanitizeNumber(selectedObject.rotation[2], 1, 3)
       })
     }
   }, [selectedObject])
@@ -42,7 +53,7 @@ const LeftSidebar = () => {
   }
 
   const handleScaleChange = (axis, value) => {
-    const newScale = { ...scaleValues, [axis]: parseFloat(value) || 0 }
+    const newScale = { ...scaleValues, [axis]: sanitizeNumber(value, 0.1, 6) }
     setScaleValues(newScale)
     
     if (selectedObject) {
@@ -51,8 +62,8 @@ const LeftSidebar = () => {
   }
 
   const handlePositionChange = (axis, value) => {
-    const snapped = Math.round((parseFloat(value) || 0) * 10) / 10
-    const newPosition = { ...positionValues, [axis]: snapped }
+    const clean = sanitizeNumber(value, 0.1, 6)
+    const newPosition = { ...positionValues, [axis]: clean }
     setPositionValues(newPosition)
     
     if (selectedObject) {
@@ -61,7 +72,7 @@ const LeftSidebar = () => {
   }
 
   const handleRotationChange = (axis, value) => {
-    const newRotation = { ...rotationValues, [axis]: parseFloat(value) || 0 }
+    const newRotation = { ...rotationValues, [axis]: sanitizeNumber(value, 1, 3) }
     setRotationValues(newRotation)
     
     if (selectedObject) {
@@ -124,7 +135,10 @@ const LeftSidebar = () => {
                 <input
                   type="number"
                   step="0.1"
-                  value={positionValues.x}
+                  min="0"
+                  value={focusedField==='posX' ? positionValues.x : Number(positionValues.x)}
+                  onFocus={() => setFocusedField('posX')}
+                  onBlur={() => setFocusedField(null)}
                   onChange={(e) => handlePositionChange('x', e.target.value)}
                 />
               </div>
@@ -133,7 +147,10 @@ const LeftSidebar = () => {
                 <input
                   type="number"
                   step="0.1"
-                  value={positionValues.y}
+                  min="0"
+                  value={focusedField==='posY' ? positionValues.y : Number(positionValues.y)}
+                  onFocus={() => setFocusedField('posY')}
+                  onBlur={() => setFocusedField(null)}
                   onChange={(e) => handlePositionChange('y', e.target.value)}
                 />
               </div>
@@ -142,7 +159,10 @@ const LeftSidebar = () => {
                 <input
                   type="number"
                   step="0.1"
-                  value={positionValues.z}
+                  min="0"
+                  value={focusedField==='posZ' ? positionValues.z : Number(positionValues.z)}
+                  onFocus={() => setFocusedField('posZ')}
+                  onBlur={() => setFocusedField(null)}
                   onChange={(e) => handlePositionChange('z', e.target.value)}
                 />
               </div>
@@ -155,7 +175,10 @@ const LeftSidebar = () => {
                 <input
                   type="number"
                   step="1"
-                  value={rotationValues.x}
+                  min="0"
+                  value={focusedField==='rotX' ? rotationValues.x : Number(rotationValues.x)}
+                  onFocus={() => setFocusedField('rotX')}
+                  onBlur={() => setFocusedField(null)}
                   onChange={(e) => handleRotationChange('x', e.target.value)}
                 />
               </div>
@@ -164,7 +187,10 @@ const LeftSidebar = () => {
                 <input
                   type="number"
                   step="1"
-                  value={rotationValues.y}
+                  min="0"
+                  value={focusedField==='rotY' ? rotationValues.y : Number(rotationValues.y)}
+                  onFocus={() => setFocusedField('rotY')}
+                  onBlur={() => setFocusedField(null)}
                   onChange={(e) => handleRotationChange('y', e.target.value)}
                 />
               </div>
@@ -173,7 +199,10 @@ const LeftSidebar = () => {
                 <input
                   type="number"
                   step="1"
-                  value={rotationValues.z}
+                  min="0"
+                  value={focusedField==='rotZ' ? rotationValues.z : Number(rotationValues.z)}
+                  onFocus={() => setFocusedField('rotZ')}
+                  onBlur={() => setFocusedField(null)}
                   onChange={(e) => handleRotationChange('z', e.target.value)}
                 />
               </div>
@@ -186,7 +215,10 @@ const LeftSidebar = () => {
                 <input
                   type="number"
                   step="0.1"
-                  value={scaleValues.x}
+                  min="0"
+                  value={focusedField==='sclX' ? scaleValues.x : Number(scaleValues.x)}
+                  onFocus={() => setFocusedField('sclX')}
+                  onBlur={() => setFocusedField(null)}
                   onChange={(e) => handleScaleChange('x', e.target.value)}
                 />
               </div>
@@ -195,7 +227,10 @@ const LeftSidebar = () => {
                 <input
                   type="number"
                   step="0.1"
-                  value={scaleValues.y}
+                  min="0"
+                  value={focusedField==='sclY' ? scaleValues.y : Number(scaleValues.y)}
+                  onFocus={() => setFocusedField('sclY')}
+                  onBlur={() => setFocusedField(null)}
                   onChange={(e) => handleScaleChange('y', e.target.value)}
                 />
               </div>
@@ -204,7 +239,10 @@ const LeftSidebar = () => {
                 <input
                   type="number"
                   step="0.1"
-                  value={scaleValues.z}
+                  min="0"
+                  value={focusedField==='sclZ' ? scaleValues.z : Number(scaleValues.z)}
+                  onFocus={() => setFocusedField('sclZ')}
+                  onBlur={() => setFocusedField(null)}
                   onChange={(e) => handleScaleChange('z', e.target.value)}
                 />
               </div>

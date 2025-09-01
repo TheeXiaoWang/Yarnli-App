@@ -24,7 +24,7 @@ const Select = ({ value, onChange, children, style }) => (
 const LayerlinePanel = () => {
   const { objects } = useSceneStore()
   const { settings, setSettings, generated, isGenerating, generate, exportJSON } = useLayerlineStore()
-  const { isGenerating: isGeneratingNodes, generateNodesFromLayerlines, ui, setVisibility } = useNodeStore()
+  const { isGenerating: isGeneratingNodes, generateNodesFromLayerlines, ui, setVisibility, chainScaffoldByLayer } = useNodeStore()
 
   const handleGenerate = async () => {
     await generate(objects)
@@ -41,7 +41,7 @@ const LayerlinePanel = () => {
 
       <Row label="Yarn Size">
         <Select
-          value={settings.yarnSizeLevel}
+          value={settings.yarnSizeLevel ?? 4}
           onChange={(v) => setSettings({ yarnSizeLevel: parseInt(v, 10) })}
         >
           {[1,2,3,4,5,6,7,8,9].map((n) => {
@@ -54,34 +54,25 @@ const LayerlinePanel = () => {
         </Select>
       </Row>
 
-      <Row label="Increase Factor">
+      <Row label="Inc/Dec Factor">
         <input
           type="range"
           min={0.5}
           max={2.0}
           step={0.05}
-          value={settings.increaseFactor ?? 1.0}
-          onChange={(e) => setSettings({ increaseFactor: parseFloat(e.target.value) })}
+          value={settings.increaseFactor ?? settings.decreaseFactor ?? 1.0}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value)
+            setSettings({ increaseFactor: v, decreaseFactor: v })
+          }}
           style={{ width: 180 }}
         />
       </Row>
 
-      <Row label="Decrease Factor">
-        <input
-          type="range"
-          min={0.5}
-          max={2.0}
-          step={0.05}
-          value={settings.decreaseFactor ?? 1.0}
-          onChange={(e) => setSettings({ decreaseFactor: parseFloat(e.target.value) })}
-          style={{ width: 180 }}
-        />
-      </Row>
-
-      <Row label="Increase Distribution">
+      <Row label="Inc/Dec Distribution">
         <Select
-          value={settings.planIncreaseMode || settings.planSpacingMode || 'even'}
-          onChange={(v) => setSettings({ planIncreaseMode: v })}
+          value={settings.planIncreaseMode || settings.planDecreaseMode || settings.planSpacingMode || 'even'}
+          onChange={(v) => setSettings({ planIncreaseMode: v, planDecreaseMode: v })}
           style={{ width: 180 }}
         >
           <option value="even">Even</option>
@@ -89,23 +80,15 @@ const LayerlinePanel = () => {
         </Select>
       </Row>
 
-      <Row label="Decrease Distribution">
+      <Row label="Scaffold Planner">
         <Select
-          value={settings.planDecreaseMode || settings.planSpacingMode || 'even'}
-          onChange={(v) => setSettings({ planDecreaseMode: v })}
+          value={settings.scaffoldVersion || 'v1'}
+          onChange={(v) => setSettings({ scaffoldVersion: v })}
           style={{ width: 180 }}
         >
-          <option value="even">Even</option>
-          <option value="jagged">Jagged</option>
+          <option value="v1">V1 (bucket-based)</option>
+          <option value="v2">V2 (proximity-based)</option>
         </Select>
-      </Row>
-
-      <Row label="Show Full Scaffold">
-        <input
-          type="checkbox"
-          checked={Boolean(settings.showFullScaffold)}
-          onChange={(e) => setSettings({ showFullScaffold: e.target.checked })}
-        />
       </Row>
 
       <Row label="Show Full Scaffold">
@@ -144,7 +127,7 @@ const LayerlinePanel = () => {
       </div>
 
       <div className="properties-section" style={{ marginTop: 15 }}>
-        <h3>Magic Ring Scaffolding</h3>
+        <h3>Visibility</h3>
         <div className="property-item">
           <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input
@@ -152,7 +135,7 @@ const LayerlinePanel = () => {
               checked={ui.showScaffold}
               onChange={(e) => setVisibility({ showScaffold: e.target.checked })}
             />
-            Show MR scaffold
+            Show scaffold
           </label>
         </div>
         <div className="property-item" style={{ marginTop: 8 }}>
@@ -162,7 +145,42 @@ const LayerlinePanel = () => {
               checked={ui.showNodes}
               onChange={(e) => setVisibility({ showNodes: e.target.checked })}
             />
-            Show MR nodes
+            Show nodes
+          </label>
+        </div>
+        <div className="property-item" style={{ marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={ui.showNodePoints}
+              onChange={(e) => setVisibility({ showNodePoints: e.target.checked })}
+            />
+            Show node points
+          </label>
+        </div>
+        <div className="property-item" style={{ marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ minWidth: 120 }}>Visible transition layers:</span>
+            {(() => {
+              const maxSteps = Array.isArray(chainScaffoldByLayer) ? chainScaffoldByLayer.length : 0
+              const clamped = Math.min(Math.max(0, ui.visibleLayerCount || 0), maxSteps)
+              const disabled = maxSteps === 0
+              return (
+                <>
+                  <input
+                    type="range"
+                    min={0}
+                    max={maxSteps}
+                    step={1}
+                    value={clamped}
+                    disabled={disabled}
+                    onChange={(e) => setVisibility({ visibleLayerCount: parseInt(e.target.value || '0', 10) })}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ minWidth: 60, textAlign: 'right' }}>{clamped} / {maxSteps}</span>
+                </>
+              )
+            })()}
           </label>
         </div>
         <div className="property-item" style={{ marginTop: 8 }}>
@@ -173,6 +191,36 @@ const LayerlinePanel = () => {
               onChange={(e) => setVisibility({ showNextPoints: e.target.checked })}
             />
             Show next-layer points
+          </label>
+        </div>
+        <div className="property-item" style={{ marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={ui.showSpacing}
+              onChange={(e) => setVisibility({ showSpacing: e.target.checked })}
+            />
+            Show per-layer spacing
+          </label>
+        </div>
+        <div className="property-item" style={{ marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={ui.showIncDec}
+              onChange={(e) => setVisibility({ showIncDec: e.target.checked })}
+            />
+            Show inc/dec counts
+          </label>
+        </div>
+        <div className="property-item" style={{ marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={ui.showNodeIndices}
+              onChange={(e) => setVisibility({ showNodeIndices: e.target.checked })}
+            />
+            Show node indices
           </label>
         </div>
         <div className="property-item" style={{ marginTop: 8 }}>
@@ -265,7 +313,7 @@ const LayerlinePanel = () => {
           <span className="property-label">Render cap</span>
           <input
             type="number"
-            value={settings.renderMaxLayers}
+            value={settings.renderMaxLayers ?? 500}
             min={50}
             step={50}
             onChange={(e) => setSettings({ renderMaxLayers: parseInt(e.target.value || '0', 10) })}
@@ -286,7 +334,7 @@ const LayerlinePanel = () => {
           <input
             type="number"
             min={1}
-            value={settings.measureEvery}
+            value={settings.measureEvery ?? 5}
             onChange={(e) => setSettings({ measureEvery: Math.max(1, parseInt(e.target.value || '1', 10)) })}
             style={{ width: 60, marginLeft: 8, background: '#2a2a2a', border: '1px solid #505050', color: '#fff', padding: '4px 6px', borderRadius: 4 }}
           />

@@ -2,20 +2,25 @@ import React, { useMemo } from 'react'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { STITCH_TYPES } from '../constants/stitchTypes'
+import { Text } from '@react-three/drei'
+import { useNodeStore } from '../stores/nodeStore'
 import { computeStitchDimensions } from '../layerlines/stitches'
 import { useLayerlineStore } from '../stores/layerlineStore'
 
-const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, showScaffold = true, showConnections = false }) => {
+const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, showScaffold = true, showConnections = false, showPoints = false }) => {
   const nodeData = useMemo(() => {
     if (!nodeRing0?.nodes) return []
-    // Only include entries that have both position and tangent; skip preview-only points
     const out = []
     for (const n of nodeRing0.nodes) {
-      if (Array.isArray(n?.p) && n.p.length === 3 && Array.isArray(n?.tangent) && n.tangent.length === 3) {
-        out.push({
+      if (Array.isArray(n?.p) && n.p.length === 3) {
+        const entry = {
           position: new THREE.Vector3(n.p[0], n.p[1], n.p[2]),
-          tangent: new THREE.Vector3(n.tangent[0], n.tangent[1], n.tangent[2]).normalize(),
-        })
+          tangent: null,
+        }
+        if (Array.isArray(n?.tangent) && n.tangent.length === 3) {
+          entry.tangent = new THREE.Vector3(n.tangent[0], n.tangent[1], n.tangent[2]).normalize()
+        }
+        out.push(entry)
       }
     }
     return out
@@ -31,6 +36,7 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
 
   // Pull stitch/yarn settings
   const { settings } = useLayerlineStore()
+  const { ui } = useNodeStore()
   const stitchType = settings?.magicRingStitchType && STITCH_TYPES[settings.magicRingStitchType]
     ? settings.magicRingStitchType
     : 'mr'
@@ -68,29 +74,29 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
   return (
     <group>
       {/* Debug info - only show in development */}
-      {process.env.NODE_ENV === 'development' && nodeRing0?.meta && (
+      {(typeof import.meta !== 'undefined' && import.meta.env?.DEV) && nodeRing0?.meta && (
         <group position={[0, 0, 0]}>
           {/* This would be a text overlay in a real implementation */}
         </group>
       )}
 
-      {showScaffold && scaffoldLines.map((pts, i) => (
-        <Line key={`sc-${i}`} points={pts} color={'#ff00ff'} lineWidth={4} opacity={1} transparent />
-      ))}
-
-      {/* If nodeRing0 has raw points without tangents (e.g., next-layer preview), draw small markers */}
-      {showNodes && (nodeData.length === 0) && nodeRing0 && Array.isArray(nodeRing0.nodes) && nodeRing0.nodes.map((n, i) => {
-        const r = 0.03
-        // Shift marker up by its radius so the sphere center sits on the layer plane
-        const pos = [n.p[0], n.p[1] + r, n.p[2]]
+      {showScaffold && scaffoldLines.map((pts, i) => {
+        // Subtle light→dark gradient per segment (reduced saturation and lightness range)
+        const base = new THREE.Color(color || '#ff00ff')
+        const hsl = { h: 0, s: 0, l: 0 }
+        base.getHSL(hsl)
+        const sStart = Math.max(0, Math.min(1, hsl.s * 0.9))
+        const sEnd = Math.max(0, Math.min(1, hsl.s * 0.5))
+        const lStart = Math.min(0.6, hsl.l * 0.9)
+        const lEnd = Math.max(0.08, hsl.l * 0.25)
+        const cStart = new THREE.Color().setHSL(hsl.h, sStart, lStart)
+        const cEnd = new THREE.Color().setHSL(hsl.h, sEnd, lEnd)
         return (
-        <mesh key={`pt-${i}`} position={pos} scale={r}>
-          <sphereGeometry args={[1, 12, 12]} />
-          <meshBasicMaterial color={'#00ccff'} />
-        </mesh>)
+          <Line key={`sc-${i}`} points={pts} vertexColors={[cStart, cEnd]} lineWidth={3} opacity={0.85} transparent />
+        )
       })}
 
-      {showNodes && nodeData.map(({ position, tangent }, i) => {
+      {(showNodes || showPoints) && nodeData.map(({ position, tangent }, i) => {
         // Depth axis: surface normal (prefer center→node radial; fallback to ring meta normal)
         let depthAxis = new THREE.Vector3(0, 1, 0)
         const center = nodeRing0?.meta?.surfaceCenter || nodeRing0?.meta?.center
@@ -103,14 +109,19 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
           }
         }
 
-        // Width axis: use tangent projected into the local plane orthogonal to depthAxis
-        let widthAxis = tangent.clone().sub(depthAxis.clone().multiplyScalar(tangent.dot(depthAxis)))
-        if (widthAxis.lengthSq() < 1e-10) {
-          // Degenerate tangent (parallel to depth). Choose any stable axis not parallel to depth
+        // Width axis: prefer provided tangent; otherwise pick a stable perpendicular
+        let widthAxis = null
+        if (tangent && tangent.isVector3) {
+          widthAxis = tangent.clone().sub(depthAxis.clone().multiplyScalar(tangent.dot(depthAxis)))
+          if (widthAxis.lengthSq() < 1e-10) {
+            const arbitrary = Math.abs(depthAxis.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)
+            widthAxis = arbitrary.sub(depthAxis.clone().multiplyScalar(arbitrary.dot(depthAxis)))
+          }
+          widthAxis.normalize()
+        } else {
           const arbitrary = Math.abs(depthAxis.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)
-          widthAxis = arbitrary.sub(depthAxis.clone().multiplyScalar(arbitrary.dot(depthAxis)))
+          widthAxis = arbitrary.sub(depthAxis.clone().multiplyScalar(arbitrary.dot(depthAxis))).normalize()
         }
-        widthAxis.normalize()
 
         // Height axis: exact cross to complete right-handed orthonormal frame
         const heightAxis = new THREE.Vector3().crossVectors(depthAxis, widthAxis).normalize()
@@ -121,18 +132,32 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
 
         // Use stitchType dimensions (scaled by yarn size) directly.
         // width (long axis) → tangent, height → vertical, depth → surface normal
-        const scale = [scaleWidth, scaleHeight, scaleDepth]
+        const scale = showPoints ? [scaleWidth * 0.25, scaleHeight * 0.25, scaleDepth * 0.25] : [scaleWidth, scaleHeight, scaleDepth]
 
         // Place the node's center directly on the layer position
         const adjustedPosition = position.clone()
 
         return (
           <mesh key={`node-${i}`} position={adjustedPosition} quaternion={quat} scale={scale}>
-            <sphereGeometry args={[1, 16, 16]} />
-            <meshBasicMaterial color={profile.color ?? 0x1f77b4} />
+            <sphereGeometry args={[1, 12, 12]} />
+            <meshStandardMaterial color={profile.color ?? 0x1f77b4} roughness={0.55} metalness={0.05} />
           </mesh>
         )
       })}
+
+      {/* Index labels (independent toggle) */}
+      {ui?.showNodeIndices && nodeData.map(({ position }, i) => (
+        <Text
+          key={`node-label-${i}`}
+          position={[position.x, position.y + (scaleHeight * 1.6), position.z]}
+          fontSize={0.16}
+          color="#ffffff"
+          outlineWidth={0.02}
+          outlineColor="#000000"
+          anchorX="center"
+          anchorY="middle"
+        >{`${i}`}</Text>
+      ))}
 
       {/* Optional: show node connections for Magic Ring (debug only) */}
       {showConnections && showNodes && nodeRing0?.meta?.isMagicRing && nodeData.length > 2 && (
