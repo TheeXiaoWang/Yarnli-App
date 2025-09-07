@@ -5,8 +5,8 @@ export const STITCH_TYPES = {
   sc: {
     name: "single crochet",
     // Multipliers relative to yarn gauge (1.0 = baseline)
-    widthMul: 1.0,
-    heightMul: 1.0,
+    widthMul: 0.8,
+    heightMul: 0.6,
     depthMul: 0.5,
     color:  0x1f77b4,
     // Legacy fields (not used when *Mul is present)

@@ -3,6 +3,4 @@
 
 export { generateSphereLayers } from '../sphere'
 export { generateConeLayers } from '../cone'
-export { generateTriangleLayers } from '../triangle'
-
 

@@ -28,7 +28,10 @@ export function mapBucketsMonotonic(currentNodes, nextNodes) {
 
   // ===== INCREASES: keep original boundary logic (1→2) =====
   if (nxtN >= curN) {
-    const maxBranches = 2
+    // Special-case the initial StartPole -> Layer0 step: when there is a single parent,
+    // allow it to branch to ALL children so we connect the start pole to every node on Layer0.
+    const isSingleParent = curN === 1
+    const maxBranches = isSingleParent ? nxtN : 2
     const boundary = []
     for (let j = 0; j <= curN; j++) boundary[j] = Math.round((j * nxtN) / curN)
     for (let j = 0; j < curN; j++) {

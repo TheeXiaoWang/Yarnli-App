@@ -28,18 +28,10 @@ export function countNextStitches({ currentCount, currentCircumference, nextCirc
   const factor = c1 >= c0 ? increaseFactor : decreaseFactor
   const desired = base * factor
 
-  // Half-up rounded target
-  let target = Math.max(1, halfUp(desired))
-
-  // Directional clamp: do not increase when circumference shrinks, and vice versa
-  let nextCount
-  if (c1 < c0) {
-    nextCount = Math.min(cc, target)
-  } else if (c1 > c0) {
-    nextCount = Math.max(cc, target)
-  } else {
-    nextCount = cc
-  }
+  // Half-up rounded target strictly enforces desired spacing regardless of previous count
+  // This avoids under-counting on tilted/rotated objects where circumference was previously misread
+  // and guarantees average spacing ~= yarnWidth on every layer.
+  let nextCount = Math.max(1, halfUp(desired))
 
   // Compute delta vs current
   const delta = nextCount - cc

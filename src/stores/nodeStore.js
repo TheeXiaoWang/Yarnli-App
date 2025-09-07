@@ -3,12 +3,12 @@ import * as THREE from 'three'
 import { computeStitchDimensions } from '../layerlines/stitches'
 import { magicRing, firstLayerPlanner } from '../nodes/initial'
 import { computeOvalChainScaffold } from '../nodes/ovalChainScaffold'
-import { planScaffoldChain, planScaffoldChainV2, distributeNextNodes, countNextStitches } from '../services/scaffoldPipeline'
+import { planScaffoldChain, planScaffoldByObject, distributeNextNodes, countNextStitches } from '../services/scaffoldPipeline'
 import { useLayerlineStore } from './layerlineStore'
 import { detectOvalStart } from '../layerlines/pipeline/index.js'
 import { computeStitchGaugeFromSettings } from '../services/stitches/computeGauge'
 import { STITCH_TYPES } from '../constants/stitchTypes'
-import { intersectWithPlane, nearestPointOnPolyline } from '../components/measurements/utils'
+import { intersectWithPlane, nearestPointOnPolyline } from '../components/DevStage/measurements/utils'
 import { estimateR0FromRing0, averageRadiusFromPolyline, sampleRadiusAtY, buildScaffoldSegmentsToLayer, snapOnLayerByTheta, monotonicBuckets, enforceStepContinuity, normalizeAngle, computeOrderedAngles, angleSpan, filterInterLayerOnly, alignRingByAzimuth } from '../utils/nodes'
 import { findLayerBelow, findLayerAtLeastBelow, findImmediateLayerBelow, pickRingClosestToPoint, pickNextRingByDistance, getFirstLayerRing, deriveStartAndNormal } from '../utils/layers'
 
@@ -174,7 +174,8 @@ export const useNodeStore = create((set, get) => ({
         }
       } catch (_) {}
 
-      set({ nodes: nodesResult?.nodeRing0 || null, scaffold: nodesResult?.scaffold || null, chainScaffold: [], stitchCounts: [], scaffoldCenter: nodesResult?.nodeRing0?.meta?.center || null, lastGeneratedAt: Date.now() })
+      // Do not keep a Magic-Ring first ring; planner will generate from Layer0 upward
+      set({ nodes: null, scaffold: { segments: [] }, chainScaffold: [], stitchCounts: [], scaffoldCenter: [startCenter.x, startCenter.y, startCenter.z], lastGeneratedAt: Date.now() })
 
       // Auto-generate visual scaffold lines across all subsequent layers using circumference-based increases
       try {
@@ -214,58 +215,34 @@ export const useNodeStore = create((set, get) => ({
           return { layer: l, __key: key }
         })
         const epsKey = 1e-6
-        const layersBelow = layersWithKey
-          .filter(e => Number.isFinite(e.__key) && e.__key < startKey)
-          .sort((a, b) => b.__key - a.__key) // nearest below first
-          .map(e => e.layer)
-        const layersAbove = layersWithKey
-          .filter(e => Number.isFinite(e.__key) && e.__key > startKey)
-          .sort((a, b) => a.__key - b.__key) // nearest above first
-          .map(e => e.layer)
-        // Explicitly skip any layer whose key is ~equal to the anchor (avoid duplicate first layer)
-        let layersToProcess = (layersBelow.length > 0 ? layersBelow : layersAbove)
-          .filter(l => {
-            const poly = l?.polylines?.[0]
-            if (!poly || poly.length === 0) return true
-            const mid = poly[Math.floor(poly.length / 2)]
-            const v = new THREE.Vector3(mid[0], mid[1], mid[2])
-            const key = axisDir.dot(v.clone().sub(axisOrigin))
-            return Math.abs(key - startKey) > epsKey
-          })
-        if (!layersToProcess || layersToProcess.length <= 1) {
-          // Fallback: order by world-Y relative to start center, descending (nearest first)
-          const y0w = startCenter.y
-          const belowY = (generated.layers || []).filter(l => Number.isFinite(l?.y) && l.y < y0w).sort((a,b) => b.y - a.y)
-          const aboveY = (generated.layers || []).filter(l => Number.isFinite(l?.y) && l.y > y0w).sort((a,b) => a.y - b.y)
-          layersToProcess = (belowY.length > 0 ? belowY : aboveY)
-            .filter(l => {
-              const poly = l?.polylines?.[0]
-              if (!poly || poly.length === 0) return true
-              const mid = poly[Math.floor(poly.length / 2)]
-              const v = new THREE.Vector3(mid[0], mid[1], mid[2])
-              const key = axisDir.dot(v.clone().sub(axisOrigin))
-              return Math.abs(key - startKey) > epsKey
-            })
+        const byCloseness = layersWithKey
+          .filter((e) => Number.isFinite(e.__key))
+          .sort((a, b) => Math.abs(a.__key - startKey) - Math.abs(b.__key - startKey))
+        const layersToProcess = []
+        for (let i = 0; i < byCloseness.length; i++) {
+          const e = byCloseness[i]
+          const isFirst = i === 0
+          if (isFirst || Math.abs(e.__key - startKey) > epsKey) layersToProcess.push(e.layer)
         }
 
         // Initialize with FIRST LAYER nodes (endpoints of MR scaffold) to avoid duplicating MR->Layer0 step
-        const initialRing = (nodesResult?.scaffold?.segments && nodesResult.scaffold.segments.length > 0)
-          ? nodesResult.scaffold.segments.map(seg => ({ p: [...seg[1]] }))
-          : (nodesResult?.nodeRing0?.nodes || []).map(n => ({ p: [...n.p] }))
+        // Start from a single start-pole anchor; transition planner will create Layer0 ring
+        const initialRing = [ { p: [startCenter.x, startCenter.y, startCenter.z] } ]
         const layersToPlan = Array.isArray(layersToProcess) ? layersToProcess : []
         const globalSettings = useLayerlineStore.getState()?.settings || {}
         // Prefer the latest global setting first, then local override, then default
-        const version = (globalSettings.scaffoldVersion ?? settings?.scaffoldVersion ?? 'v1')
-        const planner = (version === 'v2') ? planScaffoldChainV2 : planScaffoldChain
+        const planner = planScaffoldChain
         // eslint-disable-next-line no-console
-        console.log('[ScaffoldPlanner]', version === 'v2' ? 'V2' : 'V1')
-        const { chainSegments, chainByLayer, childMaps, allNextRings, firstNextNodesRing } = planner({
+        console.log('[ScaffoldPlanner]', 'V1')
+        // Plan per object and flatten for current UI
+        const { chainSegments, chainByLayer, childMaps, allNextRings, firstNextNodesRing, perObject } = planScaffoldByObject({
           layers: layersToPlan,
           startKey,
           centerV,
           axisDir,
           currentNodes: initialRing,
-          distributeNextNodes: (args) => distributeNextNodes({ ...args, center: metaCenterArr, up: [axisDir.x, axisDir.y, axisDir.z], handedness: effectiveHandedness }),
+          markers: generated?.markers,
+          distributeNextNodes,
           countNextStitches,
           targetSpacing,
           increaseFactor,
@@ -273,8 +250,10 @@ export const useNodeStore = create((set, get) => ({
           incMode,
           decMode,
           spacingMode,
+          handedness: effectiveHandedness,
         })
-        const spacingPerLayer = allNextRings.map((entry) => {
+        // Keep all planner rings including the first layer at the start anchor
+        const spacingPerLayer = (allNextRings || []).map((entry) => {
           const nodes = entry.nodes
           if (!nodes || nodes.length < 2) return { y: entry.y, spacing: 0, p: metaCenterArr }
           let total = 0
@@ -283,25 +262,30 @@ export const useNodeStore = create((set, get) => ({
             const b = nodes[(i + 1) % nodes.length].p
             total += Math.hypot(a[0]-b[0], a[1]-b[1], a[2]-b[2])
           }
-          return { y: entry.y, spacing: total / nodes.length, p: nodes[0].p }
+          return { y: entry.y, spacing: total / nodes.length, p: nodes[0].p, objectId: entry.objectId }
         })
-        const countsPerLayer = [{ y: startKey, count: initialRing.length }, ...allNextRings.map((e) => ({ y: e.y, count: e.nodes.length }))]
+        // Stitch counts start at the first generated ring (Layer0)
+        const countsPerLayer = (allNextRings || []).map((e) => ({ y: e.y, count: e.nodes.length, objectId: e.objectId }))
         const transitionOps = []
 
         // Update immediate next for cyan lines (first step only)
         const firstBatch = chainByLayer?.[0]?.segments || []
         // eslint-disable-next-line no-console
         console.log('[ChainScaffold] segments total:', chainSegments.length, 'byLayer:', chainByLayer.length)
-        // Build a labeled, human-readable series including StartPole -> Layer0
-        const s0 = (nodesResult?.nodeRing0?.nodes || []).length
-        const startToL0 = { label: 'StartPole -> Layer0', y: startKey, fromCount: 1, toCount: s0, map: [{ from: 0, children: Array.from({ length: s0 }, (_, i) => i) }] }
-        const labeled = [startToL0, ...childMaps.map((e, i) => ({ ...e, label: `Layer${i} -> Layer${i + 1}` }))]
+        // Build a labeled, human-readable series; the first map may be from StartPole (1) to Layer0
+        const labeled = childMaps.map((e, i) => {
+          const label = (i === 0 && e.fromCount === 1)
+            ? 'StartPole -> Layer0'
+            : `Layer${i} -> Layer${i + 1}`
+          return { ...e, label }
+        })
         // eslint-disable-next-line no-console
         console.log('[NodeChildPath]', labeled)
         // Include StartPole -> Layer0 as an initial step for UI sliders
-        const startToFirstLayerEntry = { y: startKey, segments: nodesResult?.scaffold?.segments || [] }
-        const chainByLayerWithStart = [startToFirstLayerEntry, ...chainByLayer]
-        const chainAllWithStart = [ ...(nodesResult?.scaffold?.segments || []), ...chainSegments ]
+        // No pre-created MR scaffold; show planner output only, with an initial StartPole->Layer0 label for UI
+        const chainByLayerFiltered = (chainByLayer || [])
+        const chainByLayerWithStart = chainByLayerFiltered
+        const chainAllWithStart = chainByLayerFiltered.flatMap(e => e.segments || [])
         set({ nextNodes: null, nextPoints: firstNextNodesRing, nextLayersPoints: allNextRings, spacingPerLayer, transitionOps, nextScaffold: { segments: firstBatch, meta: { center: metaCenterArr } }, chainScaffold: chainAllWithStart, chainScaffoldByLayer: chainByLayerWithStart, stitchCounts: countsPerLayer, scaffoldCenter: metaCenterArr, nodeChildPath: labeled })
       } catch (err) { 
         // eslint-disable-next-line no-console

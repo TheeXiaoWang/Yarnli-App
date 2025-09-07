@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, PerformanceMonitor, AdaptiveDpr, AdaptiveEvents, Preload, GizmoHelper, GizmoViewcube } from '@react-three/drei'
-import YarnStage from './components/YarnStage'
-import ResolutionModal from './components/ResolutionModal'
-import CustomViewCube from './components/CustomViewCube'
-import Scene3D from './components/Scene3D'
-import TopToolbar from './components/TopToolbar'
-import LeftSidebar from './components/LeftSidebar'
-import RightSidebar from './components/RightSidebar'
+import YarnStage from './components/DevStage/YarnStage'
+import ResolutionModal from './components/DevStage/ResolutionModal'
+import CustomViewCube from './components/DevStage/CustomViewCube'
+import Scene3D from './components/DevStage/Scene3D'
+import Home from './components/home/Home'
+import TopToolbar from './components/DevStage/TopToolbar'
+import LeftSidebar from './components/DevStage/LeftSidebar'
+import RightSidebar from './components/DevStage/RightSidebar'
 import { useNodeStore } from './stores/nodeStore'
-import StatusBar from './components/StatusBar'
+import StatusBar from './components/DevStage/StatusBar'
 import { useSceneStore } from './stores/sceneStore'
 import { TransformProvider, useTransformMode } from './contexts/TransformContext'
 import * as THREE from 'three'
@@ -21,6 +22,13 @@ function App() {
   const [autoDpr, setAutoDpr] = useState(true)
   const [lowQuality, setLowQuality] = useState(false)
   const [showRes, setShowRes] = useState(false)
+  const [isEditor, setIsEditor] = useState(() => window?.location?.hash === '#/editor')
+
+  useEffect(() => {
+    const onHash = () => setIsEditor(window?.location?.hash === '#/editor')
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
 
   useEffect(() => {
     const handler = (e) => {
@@ -56,6 +64,10 @@ function App() {
       return () => window.removeEventListener('keydown', handler)
     }, [setTransformMode])
     return null
+  }
+
+  if (!isEditor) {
+    return <Home />
   }
 
   return (

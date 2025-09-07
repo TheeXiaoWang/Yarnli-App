@@ -3,7 +3,7 @@ import { countNextStitches } from '../../nodes/transitions/countNextStitches'
 import { distributeNextNodes } from '../../nodes/transitions/distributeNextNodes'
 import { mapBucketsMonotonic } from '../../nodes/transitions/mapBuckets'
 import { enforceStepContinuity } from '../../utils/nodes/scaffold'
-import { nearestPointOnPolyline } from '../../components/measurements/utils'
+import { nearestPointOnPolyline } from '../../components/DevStage/measurements/utils'
 
 export function buildStep({ layer, currentNodes, currentRadius, centerV, axisDir, spacingParams, alignByAzimuth, metaCenterArr, handedness, prevSegments = null }) {
   const yNext = Number(layer.y)

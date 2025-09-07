@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { intersectWithPlane, nearestPointOnPolyline } from '../../components/measurements/utils'
+import { intersectWithPlane, nearestPointOnPolyline } from '../../components/DevStage/measurements/utils'
 
 export function buildScaffoldSegmentsToLayer(currentNodes, nextLayer, center, normal) {
   if (!currentNodes || !Array.isArray(currentNodes.nodes) || !nextLayer) return []
