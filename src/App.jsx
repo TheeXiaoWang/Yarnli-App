@@ -6,6 +6,8 @@ import ResolutionModal from './components/DevStage/ResolutionModal'
 import CustomViewCube from './components/DevStage/CustomViewCube'
 import Scene3D from './components/DevStage/Scene3D'
 import Home from './components/home/Home'
+import GalleryPage from './components/gallery/GalleryPage'
+import TutorialPage from './components/tutorial/TutorialPage'
 import TopToolbar from './components/DevStage/TopToolbar'
 import LeftSidebar from './components/DevStage/LeftSidebar'
 import RightSidebar from './components/DevStage/RightSidebar'
@@ -22,10 +24,10 @@ function App() {
   const [autoDpr, setAutoDpr] = useState(true)
   const [lowQuality, setLowQuality] = useState(false)
   const [showRes, setShowRes] = useState(false)
-  const [isEditor, setIsEditor] = useState(() => window?.location?.hash === '#/editor')
+  const [route, setRoute] = useState(() => window?.location?.hash || '#/')
 
   useEffect(() => {
-    const onHash = () => setIsEditor(window?.location?.hash === '#/editor')
+    const onHash = () => setRoute(window?.location?.hash || '#/')
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
@@ -66,9 +68,10 @@ function App() {
     return null
   }
 
-  if (!isEditor) {
-    return <Home />
-  }
+  if (route === '#/' || route === '' || route === '#') return <Home />
+  if (route === '#/gallery') return <GalleryPage />
+  if (route === '#/tutorial') return <TutorialPage />
+  if (route !== '#/editor') return <Home />
 
   return (
     <TransformProvider>

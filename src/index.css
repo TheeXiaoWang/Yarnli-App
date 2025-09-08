@@ -1,3 +1,189 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Warm Yarn Artist Community Colors */
+    --background: 320 25% 96%;
+    --foreground: 280 15% 20%;
+
+    --card: 320 20% 94%;
+    --card-foreground: 280 15% 20%;
+
+    --popover: 320 20% 94%;
+    --popover-foreground: 280 15% 20%;
+
+    --primary: 260 60% 60%;
+    --primary-foreground: 0 0% 98%;
+    --primary-glow: 270 65% 70%;
+
+    --secondary: 310 40% 65%;
+    --secondary-foreground: 0 0% 15%;
+
+    --muted: 320 15% 88%;
+    --muted-foreground: 280 10% 45%;
+
+    --accent: 50 95% 65%;
+    --accent-foreground: 0 0% 15%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 320 20% 82%;
+    --input: 320 15% 90%;
+    --ring: 270 45% 55%;
+
+    /* Organic, handcrafted gradients */
+    --gradient-yarn-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)), hsl(var(--accent) / 0.3));
+    --gradient-yarn-soft: radial-gradient(ellipse at top, hsl(var(--background)), hsl(var(--card)));
+    --gradient-yarn-accent: linear-gradient(45deg, hsl(var(--accent)), hsl(var(--secondary)), hsl(var(--primary-glow) / 0.4));
+    --gradient-yarn-warm: linear-gradient(135deg, hsl(var(--accent) / 0.8), hsl(var(--secondary) / 0.6), hsl(var(--primary) / 0.3));
+
+    /* Soft, organic shadows */
+    --shadow-yarn-soft: 0 6px 20px -4px hsl(var(--primary) / 0.12);
+    --shadow-yarn-medium: 0 10px 30px -5px hsl(var(--primary) / 0.18);
+    --shadow-yarn-strong: 0 20px 40px -8px hsl(var(--primary) / 0.25);
+    --shadow-yarn-glow: 0 0 40px hsl(var(--primary-glow) / 0.4);
+    --shadow-yarn-warm: 0 8px 25px -6px hsl(var(--accent) / 0.3);
+
+    /* Organic transitions */
+    --transition-yarn: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --transition-yarn-slow: all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    /* Dark Yarn Art Theme */
+    --background: 280 20% 8%;
+    --foreground: 320 15% 90%;
+
+    --card: 280 18% 12%;
+    --card-foreground: 320 15% 90%;
+
+    --popover: 280 18% 12%;
+    --popover-foreground: 320 15% 90%;
+
+    --primary: 280 55% 75%;
+    --primary-foreground: 280 20% 8%;
+    --primary-glow: 285 60% 85%;
+
+    --secondary: 280 15% 18%;
+    --secondary-foreground: 320 15% 85%;
+
+    --muted: 280 12% 15%;
+    --muted-foreground: 290 10% 60%;
+
+    --accent: 280 30% 30%;
+    --accent-foreground: 320 15% 85%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 280 15% 20%;
+    --input: 280 15% 18%;
+    --ring: 285 45% 70%;
+
+    /* Dark Yarn Gradients */
+    --gradient-yarn-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-yarn-soft: linear-gradient(180deg, hsl(var(--background)), hsl(var(--secondary)));
+    --gradient-card: linear-gradient(135deg, hsl(var(--card)), hsl(var(--muted)));
+
+    /* Dark Yarn Shadows */
+    --shadow-yarn: 0 8px 32px hsl(var(--primary) / 0.2);
+    --shadow-yarn-hover: 0 12px 40px hsl(var(--primary) / 0.3);
+    --shadow-soft: 0 4px 16px hsl(var(--background) / 0.5);
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background: var(--gradient-yarn-soft);
+    position: relative;
+  }
+  
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: radial-gradient(circle at 20% 20%, hsl(var(--accent) / 0.05) 1px, transparent 1px),
+                      radial-gradient(circle at 80% 80%, hsl(var(--secondary) / 0.03) 1px, transparent 1px);
+    background-size: 60px 60px, 80px 80px;
+    pointer-events: none;
+    z-index: -1;
+  }
+}
+
+@layer components {
+  /* Handcrafted yarn community styles */
+  .yarn-button {
+    @apply bg-[var(--gradient-yarn-primary)] text-primary-foreground shadow-[var(--shadow-yarn-medium)] 
+           hover:shadow-[var(--shadow-yarn-glow)] transition-[var(--transition-yarn)]
+           border-0 hover:scale-[1.03] rounded-xl;
+  }
+
+  .yarn-card {
+    @apply bg-card/80 backdrop-blur-sm border-2 border-border/60 shadow-[var(--shadow-yarn-soft)]
+           hover:shadow-[var(--shadow-yarn-warm)] transition-[var(--transition-yarn)]
+           hover:bg-card/95 hover:scale-[1.02] rounded-2xl hover:border-accent/40;
+  }
+
+  .yarn-nav-link {
+    @apply text-foreground/80 hover:text-primary transition-[var(--transition-yarn)] relative 
+           after:content-[''] after:absolute after:w-full after:scale-x-0 after:h-0.5 after:bottom-0 
+           after:left-0 after:bg-primary after:origin-bottom-right after:transition-transform 
+           after:duration-300 hover:after:scale-x-100 hover:after:origin-bottom-left;
+  }
+
+  .yarn-texture {
+    @apply relative overflow-hidden;
+  }
+
+  .yarn-texture::before {
+    @apply content-[''] absolute inset-0 opacity-[0.03] pointer-events-none;
+    background-image: radial-gradient(circle at 20% 20%, currentColor 1px, transparent 1px),
+                      radial-gradient(circle at 80% 80%, currentColor 1px, transparent 1px);
+    background-size: 60px 60px, 80px 80px;
+  }
+}
+
 .ll-debug-label:hover { opacity: 1 !important; }
 * {
   margin: 0;
