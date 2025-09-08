@@ -13,17 +13,25 @@
  *   plan length === currentCount, each entry is action for that current stitch
  *   inc = add one extra stitch after this stitch (→ two targets), sc = carry one, dec = merge
  */
-export function countNextStitches({ currentCount, currentCircumference, nextCircumference, yarnWidth, increaseFactor = 1.0, decreaseFactor = 1.0, spacingMode = 'even', seed = 0 }) {
+export function countNextStitches({ currentCount, currentCircumference, nextCircumference, yarnWidth, increaseFactor = 1.0, decreaseFactor = 1.0, spacingMode = 'even', incMode = null, decMode = null, seed = 0 }) {
   const cc = Math.max(1, Math.round(currentCount))
   const c0 = Math.max(1e-6, Number(currentCircumference) || 0)
   const c1 = Math.max(1e-6, Number(nextCircumference) || 0)
   const w = Math.max(1e-6, Number(yarnWidth) || 0)
 
-  // Desired count based on spacing rule
-  const raw = (c1 / w)
+  // Half-up rounding helper to avoid 10.49 → 11, require ≥ .5
+  const EPS = 1e-9
+  const halfUp = (x) => Math.floor(x + 0.5 - EPS)
+
+  // Desired count based on spacing rule (in stitch units)
+  const base = (c1 / w)
   const factor = c1 >= c0 ? increaseFactor : decreaseFactor
-  const desired = Math.round(raw * factor)
-  let nextCount = Math.max(1, desired)
+  const desired = base * factor
+
+  // Half-up rounded target strictly enforces desired spacing regardless of previous count
+  // This avoids under-counting on tilted/rotated objects where circumference was previously misread
+  // and guarantees average spacing ~= yarnWidth on every layer.
+  let nextCount = Math.max(1, halfUp(desired))
 
   // Compute delta vs current
   const delta = nextCount - cc
@@ -38,9 +46,10 @@ export function countNextStitches({ currentCount, currentCircumference, nextCirc
     return rngState / 0xffffffff
   }
 
-  const placeActions = (count, tag) => {
+  const placeActions = (count, tag, modeOverride) => {
     if (count <= 0) return
-    if (spacingMode === 'even' || count === 1) {
+    const mode = modeOverride || spacingMode || 'even'
+    if (mode === 'even' || count === 1) {
       for (let k = 0; k < count; k++) {
         const j = Math.floor((k * cc) / count)
         plan[j] = tag
@@ -98,9 +107,9 @@ export function countNextStitches({ currentCount, currentCircumference, nextCirc
   }
 
   if (delta > 0) {
-    placeActions(delta, 'inc')
+    placeActions(delta, 'inc', incMode)
   } else if (delta < 0) {
-    placeActions(-delta, 'dec')
+    placeActions(-delta, 'dec', decMode)
   }
 
   return { nextCount, plan }

@@ -5,8 +5,8 @@ export function enforceTailSpacing(layers, settings, markers) {
   // Only guard the final ring. Do NOT exceed regular spacing or we will eat the
   // whole stack one-by-one. Keep thresholds slightly below one stitch height to
   // allow minor numerical variation but cull the "forced last ring" near the pole.
-  const minPrevGap = Math.max(1e-4, stitchH * 0.98)
-  const minPoleGap = Math.max(1e-4, stitchH * 0.98)
+  const minPrevGap = Math.max(1e-4, stitchH * 0.4)
+  const minPoleGap = Math.max(1e-4, stitchH * 0.4)
 
   const nearestBetween = (a,b) => {
     if (!a||!b) return Infinity

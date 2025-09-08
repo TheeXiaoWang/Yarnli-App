@@ -92,7 +92,7 @@ function normalFromPolyline(poly) {
   return normal.normalize()
 }
 
-export function detectOvalStart({ layers, startCenter, ringPlaneNormal, stitchGauge, ovalThreshold = 1.001, chainThreshold = 1.6, poleAxis = null }) {
+export function detectOvalStart({ layers, startCenter, ringPlaneNormal, stitchGauge, ovalThreshold = 1.3, chainThreshold = 1.6, poleAxis = null }) {
   const firstSel = pickRingClosestToPoint(layers, startCenter)
   if (!firstSel) return { isOval: false }
   const nextSel = pickNextRingByDistance(layers, startCenter, firstSel.poly)

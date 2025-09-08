@@ -3,16 +3,22 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+<<<<<<< HEAD
 pnpm-debug.log*
 lerna-debug.log*
+=======
+>>>>>>> 41c655e57bf290d37719b84a3f3a6f043fadfd9f
 
 # Build outputs
 dist/
 build/
+<<<<<<< HEAD
 *.local
 
 # Vite
 .vite/
+=======
+>>>>>>> 41c655e57bf290d37719b84a3f3a6f043fadfd9f
 *.tsbuildinfo
 
 # Environment variables
@@ -88,6 +94,14 @@ jspm_packages/
 
 # Nuxt.js build / generate output
 .nuxt
+<<<<<<< HEAD
+=======
+dist
+
+# Gatsby files
+.cache/
+public
+>>>>>>> 41c655e57bf290d37719b84a3f3a6f043fadfd9f
 
 # Storybook build outputs
 .out
@@ -97,6 +111,7 @@ jspm_packages/
 tmp/
 temp/
 
+<<<<<<< HEAD
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -109,3 +124,6 @@ temp/
 
 # Local Netlify folder
 .netlify
+=======
+
+>>>>>>> 41c655e57bf290d37719b84a3f3a6f043fadfd9f

@@ -9,7 +9,9 @@ export const useLayerlineStore = create((set, get) => ({
     tightenFactor: 1.0,
     increaseFactor: 1.0, // scales increases derived from circumference ratio
     decreaseFactor: 1.0, // scales decreases when circumference shrinks
-    planSpacingMode: 'even', // 'even' | 'jagged'
+    planSpacingMode: 'even', // default for both inc/dec if specific not set
+    planIncreaseMode: 'even', // 'even' | 'jagged'
+    planDecreaseMode: 'even', // 'even' | 'jagged'
     showFullScaffold: false,
 
     // Advanced/legacy (still supported by generators if provided)
@@ -38,6 +40,8 @@ export const useLayerlineStore = create((set, get) => ({
     chainThreshold: 1.6,
     // Fragment filtering
     minFragmentRatio: 0.2, // Minimum perimeter ratio for layer fragments (0.0 to 1.0)
+    // Node rotation for spheres
+    nodePitchMul: 4.0, // Multiplier for sphere node pitch rotation (default 2.0, now 4.0 for double rotation)
   },
   generated: {
     layers: [],

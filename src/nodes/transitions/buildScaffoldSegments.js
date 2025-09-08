@@ -25,21 +25,23 @@ export function buildScaffoldSegments({ currentNodes, nextNodes, plan }) {
     const a = A[j]?.p
     if (!a) continue
     const action = P[j] || 'sc'
-    const startK = k
-    if (action === 'inc' && k < M - 1) {
-      // map to two targets
-      segments.push([a, B[k].p])
-      segments.push([a, B[k + 1].p])
-      k = Math.min(M - 1, k + 2)
+    if (action === 'inc') {
+      // Always split: j -> k and j -> k+1 (wrap-safe)
+      const k1 = k % M
+      const k2 = (k + 1) % M
+      segments.push([a, B[k1].p])
+      segments.push([a, B[k2].p])
+      k = (k + 2) % M
     } else if (action === 'dec') {
-      // no explicit segment; merged by neighbors; advance k only when needed
-      // keep k unchanged
+      // Merge: connect to current k, but advance k only when needed by neighbors
+      const k1 = k % M
+      segments.push([a, B[k1].p])
+      // keep k as-is to allow next current stitch to hit the same next node
     } else {
-      // single
-      segments.push([a, B[k].p])
-      k = Math.min(M - 1, k + 1)
+      const k1 = k % M
+      segments.push([a, B[k1].p])
+      k = (k + 1) % M
     }
-    if (k < startK) k = startK
   }
   return segments
 }
