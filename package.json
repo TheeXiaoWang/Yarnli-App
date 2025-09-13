@@ -6,16 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview",
-    "lint": "eslint . --ext js,jsx,ts,tsx",
-    "lint:fix": "eslint . --ext js,jsx,ts,tsx --fix"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@radix-ui/react-slot": "^1.0.2",
+    "@radix-ui/react-avatar": "^1.1.10",
+    "@radix-ui/react-primitive": "^2.1.3",
+    "@radix-ui/react-slot": "^1.2.3",
     "@react-three/drei": "^9.88.13",
     "@react-three/fiber": "^8.15.11",
     "@react-three/postprocessing": "^2.15.11",
-    "class-variance-authority": "^0.7.0",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "leva": "^0.9.35",
     "lucide-react": "^0.469.0",
@@ -31,16 +31,15 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.13",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
     "@types/three": "^0.158.3",
-    "@vitejs/plugin-react": "^4.1.1",
-    "eslint": "^8.53.0",
-    "eslint-plugin-react": "^7.33.2",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.4",
-    "vite": "^6.3.5",
-    "vite-tsconfig-paths": "^5.1.4"
+    "@vitejs/plugin-react-swc": "^3.11.0",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.13",
+    "vite": "^6.3.5"
   },
   "keywords": [
     "react",
@@ -51,8 +50,5 @@
     "crochet"
   ],
   "author": "CrochetCAD Team",
-  "license": "MIT",
-  "eslintIgnore": [
-    "src/components/ui/**"
-  ]
+  "license": "MIT"
 }

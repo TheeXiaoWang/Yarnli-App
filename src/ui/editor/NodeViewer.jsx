@@ -1,0 +1,194 @@
+import React, { useMemo } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import { Line } from '@react-three/drei'
+import * as THREE from 'three'
+import { STITCH_TYPES } from '../../constants/stitchTypes'
+import { Text } from '@react-three/drei'
+import { useNodeStore } from '../../app/stores/nodeStore'
+import { computeStitchDimensions } from '../../domain/layerlines/stitches'
+import { useLayerlineStore } from '../../app/stores/layerlineStore'
+import { calculateSphereOrientation, calculateConeOrientation, calculateDefaultOrientation } from '../../domain/nodes/utils/orientation'
+import { computeLayerTiltAngle } from '../../domain/layerlines/tilt'
+import { getQuaternionFromTN } from '../../utils/nodes/orientation/getQuaternionFromTN'
+
+const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, showScaffold = true, showConnections = false, showPoints = false, objectType = null }) => {
+  const nodeData = useMemo(() => {
+    if (!nodeRing0?.nodes) return []
+    const out = []
+    for (const n of nodeRing0.nodes) {
+      if (Array.isArray(n?.p) && n.p.length === 3) {
+        const entry = {
+          position: new THREE.Vector3(n.p[0], n.p[1], n.p[2]),
+          tangent: null,
+          normal: null,
+        }
+        if (Array.isArray(n?.tangent) && n.tangent.length === 3) {
+          entry.tangent = new THREE.Vector3(n.tangent[0], n.tangent[1], n.tangent[2]).normalize()
+        }
+        if (Array.isArray(n?.normal) && n.normal.length === 3) {
+          entry.normal = new THREE.Vector3(n.normal[0], n.normal[1], n.normal[2]).normalize()
+        }
+        if (typeof n?.theta === 'number') {
+          entry.theta = n.theta
+        }
+        if (Array.isArray(n?.quaternion) && n.quaternion.length === 4) {
+          entry.quaternion = n.quaternion.slice(0, 4)
+        }
+        out.push(entry)
+      }
+    }
+    return out
+  }, [nodeRing0])
+
+  const scaffoldLines = useMemo(() => {
+    if (!scaffold?.segments) return []
+    const lines = scaffold.segments.map((seg, i) => seg.map(([x, y, z]) => new THREE.Vector3(x, y, z)))
+    // eslint-disable-next-line no-console
+    if (lines.length > 0) console.log('[NodeViewer] drawing scaffold lines:', lines.length)
+    return lines
+  }, [scaffold])
+
+  // Dev helper: simple dot spheres at node centers (include id to highlight node 0)
+  const dotNodes = useMemo(() => {
+    const nodes = nodeRing0?.nodes || []
+    return nodes.map((n) => ({ id: n?.id ?? null, p: (Array.isArray(n?.p) ? n.p.slice(0, 3) : [0, 0, 0]) }))
+  }, [nodeRing0])
+
+  // Pull stitch/yarn settings
+  const { settings } = useLayerlineStore()
+  const { ui } = useNodeStore()
+  // Enforce single crochet sizing for node placement visuals to avoid any warping
+  const profile = STITCH_TYPES.sc
+  const yarnLevel = Number(settings?.yarnSizeLevel) || 4
+
+  // Compute scaled dimensions based on yarn size
+  // Compute scaled dimensions based on yarn size, then apply per-stitch multipliers
+  const baseDims = computeStitchDimensions({ sizeLevel: yarnLevel, baseWidth: 1, baseHeight: 1 })
+  const scaledWidth = baseDims.width * (profile.widthMul ?? 1.0)
+  const scaledHeight = baseDims.height * (profile.heightMul ?? 1.0)
+  const scaledDepth = baseDims.width * (profile.depthMul ?? 0.5) // base on width gauge for depth scaling
+
+  // Map dimensions to render scale in scene units (keep similar visual footprint as before)
+  // width: along layerline tangent; height: vertical; depth: perpendicular to surface
+  // SphereGeometry(1) has radius=1 (diameter=2). Use half-dimensions for scale so
+  // the resulting world-space diameter matches scaledWidth/Height/Depth.
+  const scaleWidth = Math.max(0.0025, scaledWidth * 0.5)
+  const scaleHeight = Math.max(0.0025, scaledHeight * 0.5)
+  const scaleDepth = Math.max(0.0025, scaledDepth * 0.5)
+
+  // Calculate node spacing for visual feedback
+  const nodeSpacing = useMemo(() => {
+    if (!nodeRing0?.nodes || nodeRing0.nodes.length < 2) return 0
+    if (!nodeRing0?.meta?.radius) return 0
+    
+    const radius = nodeRing0.meta.radius
+    const circumference = 2 * Math.PI * radius
+    return circumference / nodeRing0.nodes.length
+  }, [nodeRing0])
+
+  return (
+    <group>
+      {/* Debug info - only show in development */}
+      {(typeof import.meta !== 'undefined' && import.meta.env?.DEV) && nodeRing0?.meta && (
+        <group position={[0, 0, 0]}>
+          {/* This would be a text overlay in a real implementation */}
+        </group>
+      )}
+
+      {showScaffold && scaffoldLines.map((pts, i) => {
+        // Subtle light→dark gradient per segment (reduced saturation and lightness range)
+        const base = new THREE.Color(color || '#ff00ff')
+        const hsl = { h: 0, s: 0, l: 0 }
+        base.getHSL(hsl)
+        const sStart = Math.max(0, Math.min(1, hsl.s * 0.9))
+        const sEnd = Math.max(0, Math.min(1, hsl.s * 0.5))
+        const lStart = Math.min(0.6, hsl.l * 0.9)
+        const lEnd = Math.max(0.08, hsl.l * 0.25)
+        const cStart = new THREE.Color().setHSL(hsl.h, sStart, lStart)
+        const cEnd = new THREE.Color().setHSL(hsl.h, sEnd, lEnd)
+        return (
+          <Line key={`sc-${i}`} points={pts} vertexColors={[cStart, cEnd]} lineWidth={3} opacity={0.85} transparent />
+        )
+      })}
+
+      {/* Dev overlay: tiny spheres at raw node points (does not alter node logic) */}
+      {ui?.showNodePoints && dotNodes.length > 0 && (
+        <group>
+          {dotNodes.map((n, i) => (
+            <mesh key={`np-${i}`} position={[n.p[0], n.p[1], n.p[2]]}>
+              <sphereGeometry args={[0.06, 8, 8]} />
+              <meshBasicMaterial color={n.id === 0 ? '#ff5555' : '#77e9ff'} depthWrite={false} transparent opacity={0.95} />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      {showNodes && (() => {
+        const OrientedNode = ({ position, tangent, normal, quaternion, theta, idx }) => {
+          const ref = useRef()
+          useLayoutEffect(() => {
+            if (!ref.current) return
+            if (Array.isArray(quaternion) && quaternion.length === 4) {
+              // Trust baked quaternion
+              ref.current.quaternion.fromArray(quaternion)
+              try { if (import.meta?.env?.DEV) console.log('baked quat', idx, quaternion, 'theta', theta) } catch(_) {}
+            } else if (tangent && normal) {
+              // Fallback only: build via canonical TN builder without extra tilt
+              const q = getQuaternionFromTN(tangent, normal, 0)
+              ref.current.quaternion.copy(q)
+              try { if (import.meta?.env?.DEV) console.log('fallback TN quat (no tilt)', idx, q.toArray()) } catch(_) {}
+            }
+          }, [quaternion, tangent, normal, theta, idx])
+          return (
+            <mesh ref={ref} position={position} scale={[scaleWidth, scaleHeight, scaleDepth]}>
+              <sphereGeometry args={[1, 12, 12]} />
+              <meshStandardMaterial color={profile.color ?? 0x1f77b4} roughness={0.55} metalness={0.05} />
+            </mesh>
+          )
+        }
+
+        return nodeData.map((n, i) => (
+          <OrientedNode key={`node-${i}`} position={n.position} tangent={n.tangent} normal={n.normal} quaternion={n.quaternion} theta={n.theta} idx={i} />
+        ))
+      })()}
+
+      {/* Index labels (independent toggle) */}
+      {ui?.showNodeIndices && nodeData.map(({ position }, i) => (
+        <Text
+          key={`node-label-${i}`}
+          position={[position.x, position.y + (scaleHeight * 1.6), position.z]}
+          fontSize={0.16}
+          color="#ffffff"
+          outlineWidth={0.02}
+          outlineColor="#000000"
+          anchorX="center"
+          anchorY="middle"
+        >{`${i}`}</Text>
+      ))}
+
+      {/* Optional: show node connections for Magic Ring (debug only) */}
+      {showConnections && showNodes && nodeRing0?.meta?.isMagicRing && nodeData.length > 2 && (
+        <group>
+          {nodeData.map(({ position }, i) => {
+            const nextIndex = (i + 1) % nodeData.length
+            const nextPosition = nodeData[nextIndex].position
+            return (
+              <Line 
+                key={`connection-${i}`} 
+                points={[position, nextPosition]} 
+                color="#00ff00" 
+                lineWidth={1} 
+                opacity={0.6} 
+                transparent 
+              />
+            )
+          })}
+        </group>
+      )}
+    </group>
+  )
+}
+
+export default NodeViewer
+
+

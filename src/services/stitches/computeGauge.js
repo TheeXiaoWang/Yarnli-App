@@ -1,4 +1,4 @@
-import { computeStitchDimensions } from '../../layerlines/stitches'
+import { computeStitchDimensions } from '../../domain/layerlines/stitches'
 import { STITCH_TYPES } from '../../constants/stitchTypes'
 
 // Compute effective stitch width/height/depth given settings

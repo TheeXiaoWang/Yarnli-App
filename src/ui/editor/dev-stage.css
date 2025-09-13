@@ -1,0 +1,132 @@
+/* DevStage layout and essential styling (plain CSS so it always works) */
+
+.cad-layout {
+  display: grid;
+  grid-template-areas:
+    "toolbar toolbar toolbar"
+    "left canvas right";
+  grid-template-columns: 300px 1fr 340px;
+  grid-template-rows: 60px 1fr;
+  height: 100vh;
+  background: transparent;
+}
+
+.top-toolbar {
+  grid-area: toolbar;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  background: var(--panel-grad);
+  border-bottom: 1px solid hsl(var(--border));
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 16px;
+  box-shadow: var(--shadow-yarn-soft);
+}
+
+.left-sidebar {
+  grid-area: left;
+  background: var(--panel-soft);
+  border-right: 1px solid hsl(var(--border) / 0.6);
+  padding: 20px;
+  overflow-y: auto;
+  font-size: 0.875rem;
+}
+
+.right-sidebar {
+  grid-area: right;
+  background: var(--panel-soft);
+  border-left: 1px solid hsl(var(--border) / 0.6);
+  padding: 20px;
+  overflow-y: auto;
+  font-size: 0.875rem;
+}
+
+.canvas-container {
+  grid-area: canvas;
+  position: relative;
+  background: transparent;
+  overflow: hidden;
+  min-width: 0; /* allow grid to size center area correctly */
+  min-height: 0;
+}
+
+/* Ensure the WebGL canvas uses all available space */
+.canvas-container > canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* ---------- Left sidebar polish (icons/logos) ---------- */
+.sidebar-section {
+  margin-bottom: 20px;
+}
+
+.sidebar-section h3 {
+  margin: 0 0 10px 0;
+  color: #0f0b1a;
+  font-weight: 700;
+}
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 70px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 100%);
+  color: #0f0b1a;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, border-color 140ms ease;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+}
+
+.tool-btn:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.10) 100%);
+  border-color: rgba(181, 158, 255, 0.6);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.22);
+}
+
+.tool-btn:active {
+  transform: translateY(0);
+}
+
+.tool-btn svg {
+  width: 26px;
+  height: 26px;
+  color: #0f0b1a;
+}
+
+.tool-btn span, .tool-btn { /* labels under icons */
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--panel-grad);
+  border-top: 1px solid hsl(var(--border) / 0.6);
+  padding: 8px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+
+

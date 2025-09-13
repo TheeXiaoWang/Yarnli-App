@@ -4,13 +4,16 @@
 export const STITCH_TYPES = {
   sc: {
     name: "single crochet",
-    // Multipliers relative to yarn gauge (1.0 = baseline)
-    widthMul: 0.8,
-    heightMul: 0.6,
-    depthMul: 0.5,
+    // Multipliers relative to yarn gauge (1.0 = gauge baseline)
+    // Updated to better reflect real-world SC bulk: approximately 2× visual volume
+    // compared to the previous settings. Width follows the tangent direction,
+    // height is vertical, depth is normal to the surface.
+    widthMul: 1.2,   // was 0.8
+    heightMul: 1.0,  // was 0.6
+    depthMul: 0.7,   // was 0.5
     color:  0x1f77b4,
     // Legacy fields (not used when *Mul is present)
-    width: 1.0, height: 1.0, depth: 0.5,
+    width: 2.0, height: 1.2, depth: 1.0,
   },
   hdc: {
     name:   "half double",
