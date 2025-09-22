@@ -131,6 +131,13 @@ export function generateSphereLayers(object, settings, maxLayers) {
   const matrix = buildObjectMatrix(object)
   const axis = getWidestAxis(object)
   const center = new THREE.Vector3().setFromMatrixPosition(matrix)
+  // Compute axis scale ratio (longest/smallest) to drive dynamic tilt scale
+  const sX = new THREE.Vector3().setFromMatrixColumn(matrix, 0).length()
+  const sY = new THREE.Vector3().setFromMatrixColumn(matrix, 1).length()
+  const sZ = new THREE.Vector3().setFromMatrixColumn(matrix, 2).length()
+  const sMin = Math.max(1e-9, Math.min(sX, sY, sZ))
+  const sMax = Math.max(sX, sY, sZ)
+  const axisRatio = Math.max(1.0, sMax / sMin)
 
   // Determine slicing direction in world space
   const dir = new THREE.Vector3(
@@ -208,7 +215,7 @@ export function generateSphereLayers(object, settings, maxLayers) {
     const rings = sliceSphereLocal(matrix, poleLocal, cosT)
     // y used for sorting only; spacing is geodesic and independent of axis scale
     const tSort = dir.dot(center) + rDir * cosT
-    if (rings.length) layers.push({ y: tSort, polylines: rings, debugSource: { file: 'src/layerlines/sphere.js', fn: 'generateSphereLayers', kind: 'sphere-ring', localIndex: localIdx } })
+    if (rings.length) layers.push({ y: tSort, polylines: rings, meta: { axisRatio }, debugSource: { file: 'src/layerlines/sphere.js', fn: 'generateSphereLayers', kind: 'sphere-ring', localIndex: localIdx } })
     prevTheta = theta
     k++
     localIdx++
@@ -252,7 +259,7 @@ export function generateSphereLayers(object, settings, maxLayers) {
           const ringsNew = sliceSphereLocal(matrix, poleLocal, cosTNew)
           const tSortNew = dir.dot(center) + rDir * cosTNew
           if (ringsNew && ringsNew.length) {
-            layers.push({ y: tSortNew, polylines: ringsNew, debugSource: { file: 'src/layerlines/sphere.js', fn: 'generateSphereLayers', kind: 'sphere-ring', localIndex: layers.length } })
+            layers.push({ y: tSortNew, polylines: ringsNew, meta: { axisRatio }, debugSource: { file: 'src/layerlines/sphere.js', fn: 'generateSphereLayers', kind: 'sphere-ring', localIndex: layers.length } })
           }
         }
       }

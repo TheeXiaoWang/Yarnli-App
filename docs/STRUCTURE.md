@@ -3,154 +3,184 @@
 ```
 root/
   docs/
-    ARCHITECTURE.md           # system architecture notes
-    FILES.md                  # file organization guide
-    GLOSSARY.md               # terminology definitions
-    NODES_STRUCTURE.md        # nodes data model notes
-    STRUCTURE.md              # this file
-  src/
-    App.jsx                   # root app component
-    main.jsx                  # app bootstrap
-    index.css                 # global styles
+    ARCHITECTURE.md
+    FILES.md
+    GLOSSARY.md
+    NODES_STRUCTURE.md
+    STRUCTURE.md
 
-    components/               # UI components and 3D viewers
-      common/                 # shared UI components
-      DevStage/               # 3D CAD editor components
-        LayerlineViewer/      # layerline-specific viewer parts
-        measurements/         # measurement UI + geometry helpers
-        CustomViewCube.jsx    # 3D view controls
-        dev-stage.css         # editor-specific styles
-        LayerlinePanel.jsx    # layerline controls
-        LayerlineViewer.jsx   # main layerline display
-        LeftSidebar.jsx       # left panel controls
-        MeasurementsOverlay.jsx # measurement overlays
-        NodeViewer.jsx        # node visualization
-        ResolutionModal.jsx   # resolution settings
-        RightSidebar.jsx      # right panel controls
-        Scene3D.jsx           # main 3D scene
-        SceneObject.jsx       # 3D object wrapper
-        StatusBar.jsx         # status information
-        TopToolbar.jsx        # top toolbar
-        YarnStage.jsx         # yarn selection
-      gallery/                # project gallery components
-      home/                   # homepage components
-      tutorial/               # tutorial components
-      ui/                     # reusable UI components
-        ui-components.css     # component styles
+  src/
+    app/
+      App.jsx
+      main.jsx
+      index.css
+      contexts/
+        TransformContext.jsx
+      hooks/
+        use-mobile.tsx
+        use-toast.ts
+      stores/
+        history.js
+        layerlineStore.js
+        nodeStore.js
+        sceneStore.js
+
+    ui/
+      editor/
+        CustomViewCube.jsx
+        LayerlinePanel.jsx
+        LayerlineViewer.jsx
+        LayerlineViewer/
+          index.js
+          labels.js
+          Pole.jsx
+          Ring0Overlay.jsx
+          RingLines.jsx
+        LeftSidebar.jsx
+        MeasurementsOverlay.jsx
+        measurements/
+          compute.js
+          geometry/
+            anchors.js
+            stableAnchors.js
+            stackAnchors.js
+          grouping/
+            groupByObject.js
+          pipes/
+            baseline.js
+            generic.js
+            sideways.js
+            sphere.js
+          filters/
+            layers.js
+          utils.js
+        NodeViewer.jsx
+        ResolutionModal.jsx
+        RightSidebar.jsx
+        Scene3D.jsx
+        SceneObject.jsx
+        StatusBar.jsx
+        TopToolbar.jsx
+        YarnStage.jsx
+      gallery/
+      home/
+      tutorial/
+      common/
+      ui-components.css
 
     constants/
-      stitchTypes.js          # stitch type definitions and sizing multipliers
+      orientation.js        # MODEL_TO_CANON_Q etc
+      stitchTypes.js
 
-    contexts/
-      TransformContext.jsx    # camera/transform context
-
-    hooks/                    # React hooks
-      use-mobile.tsx          # mobile detection
-      use-toast.ts            # toast notifications
-
-    layerlines/               # layerline geometry + pipeline
-      pipeline/               # detection/annotation pipeline stages
-        annotateLayers.js     # layer annotation
-        index.js              # pipeline orchestration
-        labelLayers.js        # layer labeling
-        ovalDetector.js       # oval shape detection
-        ovalGate.js           # oval entry gate
-        perObject.js          # per-object processing
-        poles.js              # pole detection
-        settings.js            # pipeline settings
-        tailSpacing.js         # tail spacing logic
-        types.d.ts            # TypeScript definitions
-      generators/             # layerline generation entrypoints
+    domain/
+      layerlines/
+        circumference.js
+        pipeline.js
+        pipeline/
+          annotateLayers.js
+          labelLayers.js
+          ovalDetector.js
+          ovalGate.js
+          perObject.js
+          poles.js
+          settings.js
+          tailSpacing.js
+          types.d.ts
+        intersections/
+          clip.js
+          connectors.js
+          fragmentFilter.js
+          index.js
+          plan.js
+        intersections.js
+        layerUtils.js
+        stitches.js
+        tilt.js
+      nodes/
+        initial/
+          index.js
+          magicRing/
+            firstLayerPlanner.js
+            index.js
+            magicRing.js
+            magicRingNodes.js
+        transitions/
+          buildScaffoldSegments.js
+          countNextStitches.js
+          distributeNextNodes.js
+          index.js
+          mapBuckets.js
+          mapBucketsDeterministic.js
+        utils/
+          angles.js
+          index.js
+          orientation/
+            cone.js
+            default.js
+            detectPrimaryAxis.js
+            getQuaternionFromTN.js
+            index.js
+            sphere.js
+          orientNodeToLayerPath.js
+          radius.js
+          rotateLayerStart.js
+          scaffold.js
+      shapes/
+        cone/
+          layers.js
+        sphere/
+          layers.js
+        triangle/
+          layers.js
         index.js
-      intersections/          # layerline intersection utilities
-        clip.js               # clipping logic
-        connectors.js         # connection building
-        fragmentFilter.js     # fragment filtering
-        index.js              # intersection exports
-        plan.js               # intersection planning
-      common.js               # shared utilities
-      cone.js                 # cone layerline generation
-      intersections.js        # main intersection logic
-      pipeline.js             # main pipeline orchestration
-      sphere.js               # sphere layerline generation
-      stitches.js             # stitch geometry helpers
-      triangle.js             # triangle layerline generation
 
     lib/
-      utils.ts                # shared utility functions
+      utils.ts
 
-    nodes/                    # node generation logic
-      final/                  # finalize/aggregate outputs
+    services/
+      nodePlanning/
+        buildStep.js          # per-layer step for normal planning
+        planChain.js          # plan across layers (tip→base)
+      scaffoldPlanning/       # oval/complex chain scaffolding only
+        alignNextRingByAzimuthAxis.js
+        buildScaffoldSegments.js
+        buildStep.js
+        helpers/
+          mapping.js
+          polylineUtils.js
+        helpers.js
         index.js
-      initial/                # magic ring and initial ring logic
+        mapBuckets.js
+        mapConsecutive.js
+        planByObject.js
+        planScaffoldChain.js
+        planScaffoldChainV2.js
+      nodeOrientation/
+        buildNodeQuaternion.js
+        computeTilt.js        # tilt/roll helpers (centralized)
+        orientation.js        # legacy orientation (kept for reference)
+        orientationUtils.js
+      nodes/
+        buildNodes.js
+        mapping.js
+      stitches/
+        computeGauge.js
+
+    utils/
+      index.js
+      math/
         index.js
-        magicRing/            # magic ring specific logic
-          firstLayerPlanner.js
-          index.js
-          magicRing.js
-          magicRingNodes.js
-      transitions/            # count/distribute/build scaffold between rings
-        buildScaffoldSegments.js # scaffold building
-        countNextStitches.js  # stitch counting
-        distributeNextNodes.js # node distribution
-        index.js              # transition exports
-        mapBuckets.js         # parent-child mapping
-        mapBucketsDeterministic.js # deterministic mapping
-      utils/                  # node utilities
-        orientNodeToLayerPath.js # node orientation
-        rotateLayerStart.js   # layer start rotation
-      index.js                # main node exports
-      ovalChainScaffold.js    # oval-specific scaffold logic
+      nodes/
+        orientation/
+          applyRotisserieSpin.js
+          getQuaternionFromTN.js
 
-    services/                 # business logic services
-      chainPlan/              # chain planning services
-        buildStep.js          # step building
-        planChain.js          # chain planning
-      scaffoldPipeline/       # scaffold pipeline services
-        alignNextRingByAzimuthAxis.js # ring alignment
-        buildScaffoldSegments.js # segment building
-        buildStep.js          # step building
-        helpers.js            # helper functions
-        index.js              # pipeline exports
-        mapBuckets.js         # mapping logic
-        mapConsecutive.js     # consecutive mapping
-        planByObject.js       # object-based planning
-        planScaffoldChain.js  # chain planning
-        planScaffoldChainV2.js # chain planning v2
-      stitches/               # stitch services
-        computeGauge.js       # gauge computation
-
-    stores/                   # Zustand stores (state + orchestration)
-      nodeStore.js            # node generation + planning orchestration
-      layerlineStore.js       # layerline settings/state
-      sceneStore.js           # 3D scene state
-      history.js              # undo/redo
-
-    utils/                    # pure utilities (stateless)
-      layers/                 # layer-centric helpers
-        circumference.js      # circumference calculations
-        index.js              # barrel re-exports
-        layerUtils.js         # layer utilities
-        tilt.js               # tilt calculations
-      nodes/                  # node-centric helpers
-        angles.js             # angle calculations
-        index.js              # barrel re-exports
-        orientation/          # node orientation utilities
-          cone.js             # cone orientation
-          default.js          # default orientation
-          detectPrimaryAxis.js # axis detection
-          getQuaternionFromTN.js # quaternion from tangent/normal
-          index.js            # orientation exports
-          sphere.js           # sphere orientation
-        radius.js             # radius calculations
-        scaffold.js           # scaffold utilities
-
-  index.html                  # Vite HTML entry
-  vite.config.js              # Vite config
-  package.json                # dependencies and scripts
-  tailwind.config.js          # Tailwind CSS config
-  postcss.config.js           # PostCSS config
-  tsconfig.json               # TypeScript config
+  index.html
+  vite.config.js
+  package.json
+  tailwind.config.js
+  postcss.config.js
+  tsconfig.json
 ```
 
 ## Overview
@@ -177,13 +207,11 @@ This app turns detected layerlines (rings/contours in 3D) into crochet node plan
 
 1) **Input Processing**: 3D objects and markers come from the layerline pipeline (`src/layerlines/pipeline/*`)
 2) **Layer Generation**: Pipeline detects and generates layerlines using intersection algorithms
-3) **Node Planning**: `nodeStore.generateNodesFromLayerlines` orchestrates planning:
-   - Derives plane/origin from markers (`utils/layers`)
-   - Computes stitch sizes from yarn/stitch type (`constants`, `layerlines/stitches`)
-   - Detects special starts (oval gate/detector) to choose strategy
-   - Computes initial nodes (magic ring or oval chain)
-   - Iterates through subsequent layers to count next stitches, distribute, enforce continuity, and snap endpoints
-4) **Scaffold Building**: Connects nodes between layers using serpentine traversal for cut layers
+3) **Node Planning**: `services/nodePlanning/planChain` (default) walks layers along the axis:
+   - Per layer: `countNextStitches` → `distributeNextNodes` → mapping → `services/nodes/buildNodes`
+   - `buildNodes` uses `nodeOrientation/computeTilt.js` and `buildNodeQuaternion.js` to bake quaternions
+   - For oval/cut rings, `services/scaffoldPlanning/*` provides an alternate chain planner
+4) **Scaffold Building**: Connects nodes between layers with parent→child segments; for cut layers uses serpentine traversal
 5) **State Updates**: Store updates state for UI consumers; components render nodes/scaffolds and overlays
 6) **Visualization**: Three.js renders 3D scene with nodes, scaffolds, and measurement overlays
 
@@ -192,9 +220,8 @@ This app turns detected layerlines (rings/contours in 3D) into crochet node plan
 - **Add a new utility**:
   - Place pure helpers under `src/utils/{nodes|layers}/` and export via the barrel
 
-- **Add a new shape strategy** (recommended future layout):
-  - Create `src/domain/shapes/<shape>/` with `nodes.js`, `layers.js`, `schema.js`, and an `index.js`
-  - Register it in a shape registry and select by settings
+-- **Add a new shape strategy**:
+  - Create `src/domain/shapes/<shape>/layers.js` and register in `src/domain/shapes/index.js`
 
 - **Add a new pipeline stage**:
   - Add a module under `src/layerlines/pipeline/` and compose it in `pipeline/index.js`

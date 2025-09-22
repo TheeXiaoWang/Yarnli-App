@@ -8,6 +8,8 @@ import NodeViewer from './NodeViewer'
 import { Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { polylineLengthProjected } from '../../domain/layerlines/circumference'
+import { computeStitchDimensions } from '../../domain/layerlines/stitches'
+import { STITCH_TYPES } from '../../constants/stitchTypes'
 
 const Scene3D = () => {
   const { objects, selectedObject } = useSceneStore()
@@ -75,6 +77,51 @@ const Scene3D = () => {
       {/* Render generated layerlines */}
       <LayerlineViewer layers={generated.layers} color={settings.color} markers={generated.markers} meta={generated.meta} />
 
+      {/* Dev-only: consolidated node size summary for first 2 layers per object */}
+      {(() => {
+        try {
+          if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+            const yarnLevel = Number(settings?.yarnSizeLevel) || 4
+            const baseDims = computeStitchDimensions({ sizeLevel: yarnLevel, baseWidth: 1, baseHeight: 1 })
+            const ringsByObject = new Map()
+            const arr = Array.isArray(nextLayersPoints) ? nextLayersPoints.slice() : []
+            for (const entry of arr) {
+              const oid = entry?.objectId ?? 'unknown'
+              if (!ringsByObject.has(oid)) ringsByObject.set(oid, [])
+              if (ringsByObject.get(oid).length < 2) ringsByObject.get(oid).push(entry)
+            }
+            const summary = []
+            for (const obj of objects) {
+              const oid = obj?.id ?? 'unknown'
+              const rings = ringsByObject.get(oid) || []
+              const layers = rings.slice(0, 2).map((ring) => {
+                const nodes = Array.isArray(ring?.nodes) ? ring.nodes : []
+                const n0 = nodes[0] || {}
+                const profile = n0?.stitchProfile || STITCH_TYPES[n0?.stitchType] || STITCH_TYPES.sc
+                const wMul = Number(profile?.widthMul ?? 1.0)
+                const hMul = Number(profile?.heightMul ?? 1.0)
+                const dMul = Number(profile?.depthMul ?? 0.5)
+                const visual = {
+                  width: Math.max(0.0025, baseDims.width * wMul * 0.5),
+                  height: Math.max(0.0025, baseDims.height * hMul * 0.5),
+                  depth: Math.max(0.0025, baseDims.width * dMul * 0.5),
+                }
+                return {
+                  y: ring?.y ?? 0,
+                  count: nodes.length || 0,
+                  stitchType: n0?.stitchType || 'sc',
+                  visualScale: visual,
+                }
+              })
+              summary.push({ objectId: oid, type: obj?.type || 'unknown', layers })
+            }
+            // eslint-disable-next-line no-console
+            console.log('[NodeSizeSummary]', summary)
+          }
+        } catch (_) {}
+        return null
+      })()}
+
       {/* Render nodes/points cumulatively up to the selected layer */}
       {(ui?.showNodes || ui?.showNodePoints) && (() => {
         const vis = Math.max(0, ui?.nodeLayerVisibleCount || 0)
@@ -121,7 +168,16 @@ const Scene3D = () => {
               <NodeViewer
                 key={`nx-ring-${i}`}
                 nodeRing0={{
-                  nodes: nodesCapped.map((n) => ({ id: n.id, p: n.p, tangent: n.tangent, normal: n.normal, theta: n.theta, quaternion: n.quaternion })),
+                  nodes: nodesCapped.map((n) => ({ 
+                    id: n.id, 
+                    p: n.p, 
+                    tangent: n.tangent, 
+                    normal: n.normal, 
+                    theta: n.theta, 
+                    quaternion: n.quaternion,
+                    stitchType: n.stitchType,
+                    stitchProfile: n.stitchProfile
+                  })),
                   meta: {
                     center: scaffoldCenter,
                     surfaceCenter: scaffoldCenter,
@@ -178,7 +234,16 @@ const Scene3D = () => {
               <NodeViewer
                 key={`nx-${idx}`}
                 nodeRing0={{
-                  nodes: nodesCapped.map((n) => ({ id: n.id, p: n.p, tangent: n.tangent, normal: n.normal, theta: n.theta, quaternion: n.quaternion })),
+                  nodes: nodesCapped.map((n) => ({ 
+                    id: n.id, 
+                    p: n.p, 
+                    tangent: n.tangent, 
+                    normal: n.normal, 
+                    theta: n.theta, 
+                    quaternion: n.quaternion,
+                    stitchType: n.stitchType,
+                    stitchProfile: n.stitchProfile
+                  })),
                   meta: {
                     center: scaffoldCenter,
                     surfaceCenter: scaffoldCenter,

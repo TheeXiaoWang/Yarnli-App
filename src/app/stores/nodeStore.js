@@ -33,6 +33,7 @@ export const useNodeStore = create((set, get) => ({
     showNodes: true,
     showScaffold: true,
     showNodePoints: false,
+    showAxesHelper: false,
     showSpacing: false,
     showIncDec: false,
     showNodeIndices: false,
@@ -47,10 +48,13 @@ export const useNodeStore = create((set, get) => ({
   setVisibility: (partial) => set((state) => ({ ui: { ...state.ui, ...partial } })),
 
   // Generates MR nodes using current layerline output as guidance inputs
-  generateNodesFromLayerlines: async ({ generated, settings, handedness = 'right', tightenFactor = 1.0 }) => {
+  generateNodesFromLayerlines: async ({ generated, settings, handedness = 'right' }) => {
     if (!generated || !generated.layers || generated.layers.length === 0) return
     set({ isGenerating: true })
     try {
+      // Cache markers globally so planners can react to pole intersections
+      try { if (typeof window !== 'undefined') window.__LAYERLINE_MARKERS__ = generated?.markers || {} } catch (_) {}
+
       // Plane inputs
       const { startCenter, endCenter, ringPlaneNormal } = deriveStartAndNormal(generated.markers)
 
@@ -69,7 +73,7 @@ export const useNodeStore = create((set, get) => ({
 
       // Get stitch type for proper sizing
       const stitchType = settings?.magicRingStitchType || 'mr'
-      const stitchProfile = STITCH_TYPES[stitchType] || STITCH_TYPES.mr
+      const stitchProfile = STITCH_TYPES[stitchType] || STITCH_TYPES.mr || STITCH_TYPES.sc
       
       // Calculate actual stitch width based on stitch type and yarn size
       const baseDims = computeStitchDimensions({ 
@@ -77,6 +81,13 @@ export const useNodeStore = create((set, get) => ({
         baseWidth: 1, 
         baseHeight: 1 
       })
+      
+      // Ensure stitchProfile exists and has the required properties
+      if (!stitchProfile) {
+        console.error('Invalid stitch type:', stitchType, 'Available types:', Object.keys(STITCH_TYPES))
+        return
+      }
+      
       const widthMul = stitchProfile.widthMul ?? ((stitchProfile.width ?? 0.5) / 0.5)
       const heightMul = stitchProfile.heightMul ?? ((stitchProfile.height ?? 0.5) / 0.5)
       const actualStitchWidth = baseDims.width * widthMul
@@ -87,7 +98,7 @@ export const useNodeStore = create((set, get) => ({
 
       // Use settings from layerline store for better control
       const effectiveHandedness = settings?.handedness || handedness
-      const effectiveTightenFactor = Number.isFinite(settings?.tightenFactor) ? settings.tightenFactor : tightenFactor
+      const effectiveTightenFactor = 0.9
 
       // Module 1: count (this may be overridden by planner/settings)
       let mrCountResult = magicRing.computeMagicRingCount({
@@ -231,6 +242,7 @@ export const useNodeStore = create((set, get) => ({
         const initialRing = [ { p: [startCenter.x, startCenter.y, startCenter.z] } ]
         const layersToPlan = Array.isArray(layersToProcess) ? layersToProcess : []
         const globalSettings = useLayerlineStore.getState()?.settings || {}
+        try { if (typeof window !== 'undefined') window.__LAYERLINE_SETTINGS__ = globalSettings } catch (_) {}
         // Prefer the latest global setting first, then local override, then default
         const planner = planScaffoldChain
         // eslint-disable-next-line no-console

@@ -18,6 +18,7 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
     for (const n of nodeRing0.nodes) {
       if (Array.isArray(n?.p) && n.p.length === 3) {
         const entry = {
+          id: n?.id ?? null,
           position: new THREE.Vector3(n.p[0], n.p[1], n.p[2]),
           tangent: null,
           normal: null,
@@ -33,6 +34,13 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
         }
         if (Array.isArray(n?.quaternion) && n.quaternion.length === 4) {
           entry.quaternion = n.quaternion.slice(0, 4)
+        }
+        // Include stitch type information
+        if (n?.stitchType) {
+          entry.stitchType = n.stitchType
+        }
+        if (n?.stitchProfile) {
+          entry.stitchProfile = n.stitchProfile
         }
         out.push(entry)
       }
@@ -57,24 +65,10 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
   // Pull stitch/yarn settings
   const { settings } = useLayerlineStore()
   const { ui } = useNodeStore()
-  // Enforce single crochet sizing for node placement visuals to avoid any warping
-  const profile = STITCH_TYPES.sc
   const yarnLevel = Number(settings?.yarnSizeLevel) || 4
 
-  // Compute scaled dimensions based on yarn size
-  // Compute scaled dimensions based on yarn size, then apply per-stitch multipliers
+  // Compute base dimensions based on yarn size
   const baseDims = computeStitchDimensions({ sizeLevel: yarnLevel, baseWidth: 1, baseHeight: 1 })
-  const scaledWidth = baseDims.width * (profile.widthMul ?? 1.0)
-  const scaledHeight = baseDims.height * (profile.heightMul ?? 1.0)
-  const scaledDepth = baseDims.width * (profile.depthMul ?? 0.5) // base on width gauge for depth scaling
-
-  // Map dimensions to render scale in scene units (keep similar visual footprint as before)
-  // width: along layerline tangent; height: vertical; depth: perpendicular to surface
-  // SphereGeometry(1) has radius=1 (diameter=2). Use half-dimensions for scale so
-  // the resulting world-space diameter matches scaledWidth/Height/Depth.
-  const scaleWidth = Math.max(0.0025, scaledWidth * 0.5)
-  const scaleHeight = Math.max(0.0025, scaledHeight * 0.5)
-  const scaleDepth = Math.max(0.0025, scaledDepth * 0.5)
 
   // Calculate node spacing for visual feedback
   const nodeSpacing = useMemo(() => {
@@ -124,47 +118,152 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
       )}
 
       {showNodes && (() => {
-        const OrientedNode = ({ position, tangent, normal, quaternion, theta, idx }) => {
+        // Collect quaternion data for batch logging
+        const quaternionData = []
+        // Per-ring dev log: summarize visual size used for this object/ring
+        try {
+          if (import.meta?.env?.DEV && (nodeData?.length || 0) > 0) {
+            const n0 = nodeData[0]
+            const profile0 = (n0?.stitchProfile) || STITCH_TYPES[n0?.stitchType] || STITCH_TYPES.sc
+            const wMul = Number(profile0?.widthMul ?? 1.0)
+            const hMul = Number(profile0?.heightMul ?? 1.0)
+            const dMul = Number(profile0?.depthMul ?? 0.5)
+            const scaleWidth = Math.max(0.0025, baseDims.width * wMul * 0.5)
+            const scaleHeight = Math.max(0.0025, baseDims.height * hMul * 0.5)
+            const scaleDepth = Math.max(0.0025, baseDims.width * dMul * 0.5)
+            const meta = nodeRing0?.meta || {}
+            const label = meta?.objectType || meta?.kind || 'unknown'
+            // eslint-disable-next-line no-console
+            console.log('[NodeSize]', {
+              objectType: label,
+              yarnLevel,
+              stitchType: n0?.stitchType || 'sc',
+              baseDims,
+              multipliers: { widthMul: wMul, heightMul: hMul, depthMul: dMul },
+              visualScale: { width: scaleWidth, height: scaleHeight, depth: scaleDepth },
+              ringNodes: nodeData.length,
+            })
+          }
+        } catch (_) {}
+        
+        const OrientedNode = ({ position, tangent, normal, quaternion, theta, idx, nodeId, stitchType, stitchProfile }) => {
           const ref = useRef()
+          
+          // Calculate scale based on this node's stitch type
+          const profile = stitchProfile || STITCH_TYPES[stitchType] || STITCH_TYPES.sc
+          
+          // Ensure profile exists and has required properties
+          if (!profile || typeof profile.widthMul === 'undefined') {
+            console.error('Invalid stitch profile for node', idx, 'stitchType:', stitchType, 'profile:', profile)
+            return <mesh ref={ref} position={position} scale={[0.01, 0.01, 0.01]}>
+              <sphereGeometry args={[1, 12, 12]} />
+              <meshStandardMaterial color={0xff0000} roughness={0.55} metalness={0.05} />
+            </mesh>
+          }
+          
+          const scaledWidth = baseDims.width * (profile.widthMul ?? 1.0)
+          const scaledHeight = baseDims.height * (profile.heightMul ?? 1.0)
+          const scaledDepth = baseDims.width * (profile.depthMul ?? 0.5)
+          
+          // Map dimensions to render scale in scene units
+          const scaleWidth = Math.max(0.0025, scaledWidth * 0.5)
+          const scaleHeight = Math.max(0.0025, scaledHeight * 0.5)
+          const scaleDepth = Math.max(0.0025, scaledDepth * 0.5)
+
+          // Debug stitch type for first few nodes
+          if (import.meta?.env?.DEV && idx < 3) {
+            console.log(`[Node ${idx}] stitchType: ${stitchType}, profile:`, profile, `scale: ${scaleWidth.toFixed(4)}x${scaleHeight.toFixed(4)}x${scaleDepth.toFixed(4)}`)
+          }
+          
           useLayoutEffect(() => {
             if (!ref.current) return
             if (Array.isArray(quaternion) && quaternion.length === 4) {
-              // Trust baked quaternion
+              // Use baked quaternion
               ref.current.quaternion.fromArray(quaternion)
-              try { if (import.meta?.env?.DEV) console.log('baked quat', idx, quaternion, 'theta', theta) } catch(_) {}
+              quaternionData.push({ idx, quaternion, theta })
             } else if (tangent && normal) {
-              // Fallback only: build via canonical TN builder without extra tilt
               const q = getQuaternionFromTN(tangent, normal, 0)
               ref.current.quaternion.copy(q)
-              try { if (import.meta?.env?.DEV) console.log('fallback TN quat (no tilt)', idx, q.toArray()) } catch(_) {}
+              quaternionData.push({ idx, quaternion: q.toArray(), theta: 0, type: 'fallback' })
             }
+            // Attach axes helper for node id == 0 (per-ring debug)
+            try {
+              const { ui } = useNodeStore.getState()
+              if (ui?.showAxesHelper && nodeId === 0 && !ref.current.userData?.axesHelper) {
+                const helper = new THREE.AxesHelper(0.6)
+                ref.current.add(helper)
+                ref.current.userData = { ...(ref.current.userData || {}), axesHelper: helper }
+              } else if (!ui?.showAxesHelper && ref.current.userData?.axesHelper) {
+                ref.current.remove(ref.current.userData.axesHelper)
+                ref.current.userData.axesHelper = null
+              }
+            } catch (_) {}
           }, [quaternion, tangent, normal, theta, idx])
           return (
-            <mesh ref={ref} position={position} scale={[scaleWidth, scaleHeight, scaleDepth]}>
+            <mesh ref={ref} position={position} scale={[scaleWidth, scaleHeight, scaleDepth]} raycast={null} name="Node">
               <sphereGeometry args={[1, 12, 12]} />
               <meshStandardMaterial color={profile.color ?? 0x1f77b4} roughness={0.55} metalness={0.05} />
             </mesh>
           )
         }
 
-        return nodeData.map((n, i) => (
-          <OrientedNode key={`node-${i}`} position={n.position} tangent={n.tangent} normal={n.normal} quaternion={n.quaternion} theta={n.theta} idx={i} />
+        const nodes = nodeData.map((n, i) => (
+          <OrientedNode 
+            key={`node-${i}`} 
+            position={n.position} 
+            tangent={n.tangent} 
+            normal={n.normal} 
+            quaternion={n.quaternion} 
+            theta={n.theta} 
+            idx={i} 
+            nodeId={n.id}
+            stitchType={n.stitchType}
+            stitchProfile={n.stitchProfile}
+          />
         ))
+
+        // Batch log quaternion data instead of individual logs
+        try {
+          if (import.meta?.env?.DEV && quaternionData.length > 0) {
+            console.log(`[Quaternions] Batch: ${quaternionData.length} nodes`, quaternionData)
+          }
+        } catch (_) {}
+
+        // Debug stitch types
+        try {
+          if (import.meta?.env?.DEV && nodeData.length > 0) {
+            const stitchTypes = nodeData.map(n => ({ id: n.id, stitchType: n.stitchType, hasProfile: !!n.stitchProfile }))
+            console.log(`[StitchTypes] Nodes:`, stitchTypes)
+          }
+        } catch (_) {}
+
+        return nodes
       })()}
 
       {/* Index labels (independent toggle) */}
-      {ui?.showNodeIndices && nodeData.map(({ position }, i) => (
-        <Text
-          key={`node-label-${i}`}
-          position={[position.x, position.y + (scaleHeight * 1.6), position.z]}
-          fontSize={0.16}
-          color="#ffffff"
-          outlineWidth={0.02}
-          outlineColor="#000000"
-          anchorX="center"
-          anchorY="middle"
-        >{`${i}`}</Text>
-      ))}
+      {ui?.showNodeIndices && nodeData.map(({ position, stitchType, stitchProfile }, i) => {
+        const profile = stitchProfile || STITCH_TYPES[stitchType] || STITCH_TYPES.sc
+        
+        // Safety check for profile
+        if (!profile || typeof profile.heightMul === 'undefined') {
+          return null
+        }
+        
+        const scaledHeight = baseDims.height * (profile.heightMul ?? 1.0)
+        const scaleHeight = Math.max(0.0025, scaledHeight * 0.5)
+        return (
+          <Text
+            key={`node-label-${i}`}
+            position={[position.x, position.y + (scaleHeight * 1.6), position.z]}
+            fontSize={0.16}
+            color="#ffffff"
+            outlineWidth={0.02}
+            outlineColor="#000000"
+            anchorX="center"
+            anchorY="middle"
+          >{`${i}`}</Text>
+        )
+      })}
 
       {/* Optional: show node connections for Magic Ring (debug only) */}
       {showConnections && showNodes && nodeRing0?.meta?.isMagicRing && nodeData.length > 2 && (

@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { averageRadiusFromPolyline } from '../../domain/nodes/utils'
-import { buildStepV3 } from './buildStepV3'
+import { buildScaffoldStep } from './buildStep'
+import { resetTiltTrend } from '../nodes/buildNodes'
 
 export function planScaffoldChainV2({ layers, startKey, centerV, axisDir, currentNodes, distributeNextNodes, countNextStitches, targetSpacing, increaseFactor = 1, decreaseFactor = 1, incMode = 'even', decMode = 'even', spacingMode = 'even', increasePolicy = 'spread_out', snapToPolyline = true }) {
   // eslint-disable-next-line no-console
@@ -12,14 +13,52 @@ export function planScaffoldChainV2({ layers, startKey, centerV, axisDir, curren
   let prev = currentNodes.map(n => ({ p: [...n.p] }))
   let prevSegments = null
 
-  for (const layer of layers) {
+  // Helper function to detect if a layer is a cut layer (open polylines)
+  const isCutLayer = (layer) => {
+    return Array.isArray(layer?.polylines) && layer.polylines.length > 1
+  }
+
+  // Helper function to get adjusted yarn width for first/last layers
+  const getAdjustedYarnWidth = (layer, isFirstLayer, isLastLayer) => {
+    const isCut = isCutLayer(layer)
+    if ((isFirstLayer || isLastLayer) && !isCut) {
+      return targetSpacing * 0.6  // Use 0.6x instead of 0.3x to match stitch type
+    }
+    return targetSpacing
+  }
+
+  // Helper function to get stitch type for first/last layers
+  const getStitchType = (layer, isFirstLayer, isLastLayer) => {
+    const isCut = isCutLayer(layer)
+    if ((isFirstLayer || isLastLayer) && !isCut) {
+      return 'edge'  // Use edge stitch type for both first and last layers
+    }
+    return 'sc'  // Default to single crochet
+  }
+
+  try { resetTiltTrend() } catch (_) {}
+  for (let layerIndex = 0; layerIndex < layers.length; layerIndex++) {
+    const layer = layers[layerIndex]
+    const isFirstLayer = layerIndex === 0
+    const isLastLayer = layerIndex === layers.length - 1
+    
     const yNext = Number(layer.y)
     const rNext = averageRadiusFromPolyline(layer?.polylines?.[0], centerV) || 1
+    
+    // Use adjusted yarn width for first and last layers (when not cut layers)
+    const adjustedYarnWidth = getAdjustedYarnWidth(layer, isFirstLayer, isLastLayer)
+    
+    // Get stitch type for first/last layers
+    const stitchType = getStitchType(layer, isFirstLayer, isLastLayer)
+    
+    // Calculate circumference from geometry; do not force a circle on the last layer
+    let nextCircumference = 2 * Math.PI * rNext
+    
     let { nextCount } = countNextStitches({
       currentCount: prev.length,
       currentCircumference: 2 * Math.PI * (prev.length > 0 ? (prev.reduce((s, n) => s + Math.hypot(n.p[0]-centerV.x, n.p[2]-centerV.z), 0) / prev.length) : rNext),
-      nextCircumference: 2 * Math.PI * rNext,
-      yarnWidth: targetSpacing,
+      nextCircumference: nextCircumference,
+      yarnWidth: adjustedYarnWidth,
       increaseFactor,
       decreaseFactor,
       spacingMode,
@@ -28,21 +67,23 @@ export function planScaffoldChainV2({ layers, startKey, centerV, axisDir, curren
       seed: Math.floor(yNext * 1000),
     })
 
-    const { segments, nextCurrentNodes, parentToChildren, status } = buildStepV3({
+    const { segments, nextCurrentNodes, parentToChildren } = buildScaffoldStep({
       currentNodes: prev,
       layer,
       yNext,
       rNext,
       nextCount,
       center: [centerV.x, centerV.y, centerV.z],
+      sphereCenter: [centerV.x, centerV.y, centerV.z],
+      maxCircumference: 0,
       up: [axisDir.x, axisDir.y, axisDir.z],
       distributeNextNodes,
-      prevSegments,
-      increasePolicy,
-      snapToPolyline,
+      yarnWidth: adjustedYarnWidth,
+      stitchType: stitchType,
+      // Tilt scale is computed dynamically in buildStep based on layer meta
     })
 
-    const effectiveNextNodes = (status === 'need_split') ? prev : nextCurrentNodes
+    const effectiveNextNodes = nextCurrentNodes
     const effectiveSegments = segments
 
     chainSegments.push(...effectiveSegments)

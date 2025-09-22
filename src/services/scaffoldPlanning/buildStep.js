@@ -3,7 +3,10 @@ import { alignNextRingByAzimuthAxis } from './alignNextRingByAzimuthAxis'
 import { nearestPointOnPolyline } from '../../ui/editor/measurements/utils'
 import { resamplePolylineByArcLength, resamplePolylineByArcLengthCentered, polylineLength3D } from '../../domain/layerlines/circumference'
 import { mapBucketsMonotonic } from '../../domain/nodes/transitions/mapBuckets'
-import { orientNodeToLayerPath } from '../../domain/nodes/utils/orientNodeToLayerPath'
+import { mapBucketsLinear, allocateCountsMin1 } from '../nodes/mapping'
+import { isClosed, nearestOnPolyline, nearestPolylineId } from './helpers/polylineUtils'
+import { buildNodes } from '../nodes/buildNodes'
+import { computeRollFromCircumference, computeRingRollAngleFromCenter } from '../nodeOrientation/computeTilt'
 
 // Pure step builder: from currentNodes -> next layer (polyline + y, radius)
 // returns { segments, nextNodes, parentToChildren }
@@ -14,13 +17,58 @@ export function buildScaffoldStep({
   rNext,
   nextCount,
   center,
+  sphereCenter,
+  maxCircumference,
   up,
   handedness = 'right',
   distributeNextNodes,
   aRef = null,
   yarnWidth = 0,
+  stitchType = 'sc',
+  tiltScale = 1.0,
 }) {
+  // Dynamic tilt scale based on sphere axis ratio (if provided on the layer)
+  const dynamicTiltScaleForLayer = (layer) => {
+    try {
+      const r = Number(layer?.meta?.axisRatio)
+      if (!Number.isFinite(r) || r < 1) return 1.0
+      // Linear mapping: r=1 -> 1.8, r=1.5 -> 1.5, r=2 -> 1.2; clamp to [0.6, 1.8]
+      const s = 2.4 - 0.6 * r
+      return Math.max(0.6, Math.min(1.8, s))
+    } catch (_) { return 1.0 }
+  }
   const metaCenterArr = center
+
+  // Estimate in-plane anisotropy (stretch) from polyline points; returns a modulation in [0.5, 1]
+  // 1.0 for nearly circular rings; decreases toward 0.5 as ellipse anisotropy grows.
+  const computeStretchMod = (pts, ringCenterV, upV) => {
+    try {
+      if (!Array.isArray(pts) || pts.length < 4) return 1.0
+      const n = upV.clone().normalize()
+      let seed = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0,1,0) : new THREE.Vector3(1,0,0)
+      const u = seed.sub(n.clone().multiplyScalar(seed.dot(n))).normalize()
+      const v = new THREE.Vector3().crossVectors(n, u)
+      let sumXX = 0, sumYY = 0
+      for (const p of pts) {
+        const P = Array.isArray(p) ? new THREE.Vector3(p[0], p[1], p[2]) : new THREE.Vector3(p.x, p.y, p.z)
+        const d = P.clone().sub(ringCenterV)
+        const x = d.dot(u)
+        const y = d.dot(v)
+        sumXX += x * x
+        sumYY += y * y
+      }
+      const N = Math.max(1, pts.length)
+      const varX = sumXX / N
+      const varY = sumYY / N
+      const maxVar = Math.max(varX, varY)
+      const minVar = Math.max(1e-12, Math.min(varX, varY))
+      const anisotropy = Math.max(1.0, Math.sqrt(maxVar / minVar))
+      // Gentle falloff: gamma=0.5 → mod = 1 / sqrt(anisotropy); clamp to [0.5,1]
+      const gamma = 0.5
+      const mod = Math.max(0.1, Math.min(1.0, 1.0 / Math.pow(anisotropy, gamma)))
+      return mod
+    } catch (_) { return 1.0 }
+  }
   let { nodes: nextNodes } = distributeNextNodes({ yNext, rNext, nextCount, center: metaCenterArr, up, handedness })
   if (currentNodes && currentNodes.length > 0 && nextNodes && nextNodes.length > 0) {
     const aligned = alignNextRingByAzimuthAxis(currentNodes.map(n => n.p), nextNodes.map(n => n.p), metaCenterArr, up, handedness)
@@ -42,125 +90,6 @@ export function buildScaffoldStep({
   // For CUT rings we must NOT wrap across gaps. We resample per-arc (open) and map locally.
   const polylines = Array.isArray(layer?.polylines) ? layer.polylines.filter(p => Array.isArray(p) && p.length > 1) : []
 
-  // Helper: detect if a polyline is explicitly closed (first==last)
-  const isClosed = (poly) => (
-    Array.isArray(poly) && poly.length > 2 &&
-    poly[0][0] === poly[poly.length - 1][0] &&
-    poly[0][1] === poly[poly.length - 1][1] &&
-    poly[0][2] === poly[poly.length - 1][2]
-  )
-
-  // Local helpers for CUT handling
-  // Allocate per-arc counts proportionally, but guarantee min 1 for arcs whose length ≥ stitch width
-  const allocateCountsMin1 = (totalN, lengths, stitchW) => {
-    const sum = Math.max(1e-12, lengths.reduce((a, b) => a + b, 0))
-    const raw = lengths.map((L) => (L / sum) * totalN)
-    const base = raw.map(Math.floor)
-    let left = totalN - base.reduce((a, b) => a + b, 0)
-
-    // Enforce min 1 for non-trivial arcs (length ≥ stitchW)
-    for (let i = 0; i < lengths.length; i++) {
-      if (lengths[i] >= stitchW && base[i] === 0) {
-        base[i] = 1
-        left -= 1
-      }
-    }
-
-    // If we overshot, borrow from arcs with the largest surplus (base - raw)
-    if (left < 0) {
-      const borrow = raw.map((r, i) => ({ i, surplus: (base[i] - r) }))
-        .sort((a, b) => b.surplus - a.surplus)
-      let idx = 0
-      while (left < 0 && idx < borrow.length) {
-        const j = borrow[idx].i
-        if (base[j] > 1) { base[j] -= 1; left += 1 } // keep at least 1 if it was enforced/meaningful
-        else idx++
-      }
-    }
-
-    // Distribute any remaining positive leftover by fractional part (largest fractional first)
-    if (left > 0) {
-      const rem = raw.map((r, i) => ({ i, frac: r - base[i] })).sort((a, b) => b.frac - a.frac)
-      for (let k = 0; k < left; k++) base[rem[k % rem.length].i]++
-    }
-
-    return base
-  }
-
-  // Nearest point (squared distance) to a single open polyline; also return cumulative arc pos
-  const nearestOnPolyline = (poly, P) => {
-    let bestD2 = Infinity
-    let bestS = 0
-    let acc = 0
-    for (let i = 0; i < poly.length - 1; i++) {
-      const a = poly[i], b = poly[i + 1]
-      const ax = a[0], ay = a[1], az = a[2]
-      const bx = b[0], by = b[1], bz = b[2]
-      const vx = bx - ax, vy = by - ay, vz = bz - az
-      const wx = P.x - ax, wy = P.y - ay, wz = P.z - az
-      const vv = Math.max(1e-12, vx * vx + vy * vy + vz * vz)
-      let t = (wx * vx + wy * vy + wz * vz) / vv
-      t = Math.max(0, Math.min(1, t))
-      const px = ax + vx * t, py = ay + vy * t, pz = az + vz * t
-      const dx = P.x - px, dy = P.y - py, dz = P.z - pz
-      const d2 = dx * dx + dy * dy + dz * dz
-      if (d2 < bestD2) { bestD2 = d2; bestS = acc + Math.sqrt(vv) * t }
-      acc += Math.sqrt(vv)
-    }
-    return { d2: bestD2, s: bestS }
-  }
-
-  // Assign each parent to closest arc id
-  const nearestPolylineId = (pt, arcs) => {
-    const P = new THREE.Vector3(pt[0], pt[1], pt[2])
-    let best = 0, bestD2 = Infinity
-    for (let i = 0; i < arcs.length; i++) {
-      const { d2 } = nearestOnPolyline(arcs[i], P)
-      if (d2 < bestD2) { bestD2 = d2; best = i }
-    }
-    return best
-  }
-
-  // Linear, non-wrapping mapping suitable for open arcs
-  const mapBucketsLinear = (m, n) => {
-    const result = Array.from({ length: m }, () => [])
-    if (m === 0 || n === 0) return result
-    if (n >= m) {
-      // boundary method (no wrap)
-      const maxBranches = 2
-      for (let j = 0; j < m; j++) {
-        const kStart = Math.round((j * n) / m)
-        let kEnd = Math.max(kStart, Math.round(((j + 1) * n) / m) - 1)
-        kEnd = Math.min(kStart + (maxBranches - 1), kEnd)
-        for (let k = kStart; k <= kEnd && k < n; k++) result[j].push(k)
-      }
-      return result
-    }
-    // decreases: quota without wrap
-    const merges = m - n
-    const quota = new Array(n).fill(1)
-    // spread +1 quotas evenly
-    const pickEvenSlots = (N, K) => {
-      if (K <= 0) return []
-      const sel = []
-      const step = N / K
-      let acc = 0
-      for (let i = 0; i < K; i++) { sel.push(Math.floor(acc)); acc += step }
-      const used = new Set()
-      for (let i = 0; i < sel.length; i++) { let j = sel[i]; while (used.has(j) && j < N - 1) j++; sel[i] = Math.min(j, N - 1); used.add(sel[i]) }
-      return sel.sort((a, b) => a - b)
-    }
-    for (const idx of pickEvenSlots(n, merges)) quota[idx] = 2
-    let c = 0
-    for (let p = 0; p < m; p++) {
-      while (c < n && quota[c] === 0) c++
-      if (c >= n) c = n - 1 // clamp
-      result[p].push(c)
-      quota[c]--
-      if (quota[c] === 0 && c < n - 1) c++
-    }
-    return result
-  }
 
   if (polylines.length > 0) {
     // If we only have a single explicitly closed ring, use the original closed-curve path.
@@ -210,29 +139,29 @@ export function buildScaffoldStep({
         const kids = parentToChildren[j] || []
         for (const k of kids) segs.push([from, evenPts[k] || evenPts[0]])
       }
-      const nEven = Math.max(1, evenPts.length)
-      const centerV = new THREE.Vector3(metaCenterArr[0], metaCenterArr[1], metaCenterArr[2])
-      // Detect primary axis once per layer (default to provided up)
-      const axis = new THREE.Vector3(up[0], up[1], up[2]).normalize()
-      const refAxis = Math.abs(axis.x) > 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0)
-      const east = new THREE.Vector3().crossVectors(axis, refAxis).normalize()
-      const north = new THREE.Vector3().crossVectors(east, axis).normalize()
-      const nextCurrentNodes = evenPts.map((p, i) => {
-        const prev = evenPts[(i - 1 + nEven) % nEven]
-        const next = evenPts[(i + 1) % nEven]
-        const t = new THREE.Vector3(next[0] - prev[0], next[1] - prev[1], next[2] - prev[2]).normalize()
-        const pn = new THREE.Vector3(p[0], p[1], p[2])
-        const nrm = pn.clone().sub(centerV).normalize()
-        // Compute theta for rotisserie in the equatorial plane
-        const proj = pn.clone().sub(axis.clone().multiplyScalar(pn.dot(axis)))
-        let theta = 0
-        if (proj.lengthSq() > 1e-12) {
-          proj.normalize()
-          theta = Math.atan2(proj.dot(east), proj.dot(north))
-        }
-        try { if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) console.log('node', i, 'theta=', theta) } catch(_) {}
-        return { id: (i + 1) % nEven, p, tangent: [t.x, t.y, t.z], normal: [nrm.x, nrm.y, nrm.z], theta, quaternion: null }
-      })
+      const ringCenterV = new THREE.Vector3(metaCenterArr[0], metaCenterArr[1], metaCenterArr[2])
+      const sphereCenterV = new THREE.Vector3(sphereCenter[0], sphereCenter[1], sphereCenter[2])
+      const upV = new THREE.Vector3(up[0], up[1], up[2]).normalize()
+      const hemiSign = Math.sign(ringCenterV.clone().sub(sphereCenterV).dot(upV)) || 1
+      const thisCirc = 2 * Math.PI * Math.max(1e-9, rNext)
+      // Cone-specific tilt: constant on side (coneTilt from meta), 90° on base rings
+      if (layer?.meta?.shape === 'cone') {
+        const coneTilt = Number(layer?.meta?.coneTilt)
+        const rollFromCirc = Number.isFinite(coneTilt) ? coneTilt : (Math.PI / 4)
+        const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
+        nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
+        return { segments: segs, nextCurrentNodes, parentToChildren }
+      }
+      const effTiltScale = dynamicTiltScaleForLayer(layer)
+      let rollFromCirc = computeRollFromCircumference(thisCirc, Math.max(thisCirc, Number(maxCircumference) || thisCirc)) * effTiltScale
+      try {
+        const { latitude } = computeRingRollAngleFromCenter(ringCenterV, sphereCenterV, rNext, upV)
+        const mod = 0.5 + 0.5 * Math.abs(Math.sin(2 * latitude))
+        rollFromCirc *= mod
+      } catch (_) {}
+      // Apply stretch modulation from the closed-ring polyline
+      try { rollFromCirc *= computeStretchMod(poly, ringCenterV, upV) } catch (_) {}
+      const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
       nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
       return { segments: segs, nextCurrentNodes, parentToChildren }
     }
@@ -322,30 +251,32 @@ export function buildScaffoldStep({
       parentToChildrenGlobal[j].push(bestK)
     }
 
-    const nEven = Math.max(1, evenPts.length)
-    const centerV = new THREE.Vector3(metaCenterArr[0], metaCenterArr[1], metaCenterArr[2])
-    const axis = new THREE.Vector3(up[0], up[1], up[2]).normalize()
-    const refAxis = Math.abs(axis.x) > 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0)
-    const east = new THREE.Vector3().crossVectors(axis, refAxis).normalize()
-    const north = new THREE.Vector3().crossVectors(east, axis).normalize()
-    const nextCurrentNodes = evenPts.map((e, i) => {
-      // use forward/backward neighbors without wrapping across serpentine ends
-      const prevIdx = i > 0 ? i - 1 : 0
-      const nextIdx = i < nEven - 1 ? i + 1 : nEven - 1
-      const prev = evenPts[prevIdx].p
-      const next = evenPts[nextIdx].p
-      const t = new THREE.Vector3(next[0] - prev[0], next[1] - prev[1], next[2] - prev[2]).normalize()
-      const pn = new THREE.Vector3(e.p[0], e.p[1], e.p[2])
-      const nrm = pn.clone().sub(centerV).normalize()
-      const proj = pn.clone().sub(axis.clone().multiplyScalar(pn.dot(axis)))
-      let theta = 0
-      if (proj.lengthSq() > 1e-12) {
-        proj.normalize()
-        theta = Math.atan2(proj.dot(east), proj.dot(north))
-      }
-      try { if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) console.log('node', i, 'theta=', theta) } catch(_) {}
-      return { id: (i + 1) % nEven, p: e.p, tangent: [t.x, t.y, t.z], normal: [nrm.x, nrm.y, nrm.z], theta, quaternion: null, arc: e.arc }
-    })
+    const ringCenterV = new THREE.Vector3(metaCenterArr[0], metaCenterArr[1], metaCenterArr[2])
+    const sphereCenterV = new THREE.Vector3(sphereCenter[0], sphereCenter[1], sphereCenter[2])
+    const upV = new THREE.Vector3(up[0], up[1], up[2]).normalize()
+    const hemiSign = Math.sign(ringCenterV.clone().sub(sphereCenterV).dot(upV)) || 1
+    const thisCirc = 2 * Math.PI * Math.max(1e-9, rNext)
+    if (layer?.meta?.shape === 'cone') {
+      const coneTilt = Number(layer?.meta?.coneTilt)
+      const rollFromCirc = Number.isFinite(coneTilt) ? coneTilt : (Math.PI / 4)
+      const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
+      nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
+      return { segments: segs, nextCurrentNodes, parentToChildren: parentToChildrenGlobal }
+    }
+    const effTiltScale = dynamicTiltScaleForLayer(layer)
+    let rollFromCirc = computeRollFromCircumference(thisCirc, Math.max(thisCirc, Number(maxCircumference) || thisCirc)) * effTiltScale
+    try {
+      const { latitude } = computeRingRollAngleFromCenter(ringCenterV, sphereCenterV, rNext, upV)
+      const mod = 0.5 + 0.5 * Math.abs(Math.sin(2 * latitude))
+      rollFromCirc *= mod
+    } catch (_) {}
+    // For cut rings, estimate stretch from all arc points combined
+    try {
+      const allPts = []
+      for (const a of arcs) for (const p of a) allPts.push(p)
+      rollFromCirc *= computeStretchMod(allPts, ringCenterV, upV)
+    } catch (_) {}
+    const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
     nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
     return { segments: segs, nextCurrentNodes, parentToChildren: parentToChildrenGlobal }
   }
@@ -356,7 +287,7 @@ export function buildScaffoldStep({
   const poly = layer?.polylines?.[0]
   if (Array.isArray(poly) && poly.length > 1) {
     const evenPtsRaw = resamplePolylineByArcLength(poly, nxtN, true)
-    let evenPts = alignNextRingByAzimuthAxis(
+    let evenPtsLegacy = alignNextRingByAzimuthAxis(
       currentNodes.map(n => n.p),
       evenPtsRaw,
       metaCenterArr,
@@ -382,16 +313,16 @@ export function buildScaffoldStep({
       if (refPlane.lengthSq() > 1e-12) {
         const thetaRef = Math.atan2(refPlane.dot(v), refPlane.dot(u))
         let best = 0, bestD = Infinity
-        for (let i = 0; i < evenPts.length; i++) {
-          const th = angleOf(evenPts[i])
+        for (let i = 0; i < evenPtsLegacy.length; i++) {
+          const th = angleOf(evenPtsLegacy[i])
           let d = Math.abs(th - thetaRef)
           if (d > Math.PI) d = 2 * Math.PI - d
           if (d < bestD) { bestD = d; best = i }
         }
-        if (best !== 0) evenPts = evenPts.slice(best).concat(evenPts.slice(0, best))
+        if (best !== 0) evenPtsLegacy = evenPtsLegacy.slice(best).concat(evenPtsLegacy.slice(0, best))
       }
     }
-    const mappingOnEven = mapBucketsMonotonic(currentNodes, evenPts.map((p) => ({ p })))
+    const mappingOnEven = mapBucketsMonotonic(currentNodes, evenPtsLegacy.map((p) => ({ p })))
     parentToChildren = mappingOnEven.map.map((e) => e.children)
     const segs = []
     for (let j = 0; j < curN; j++) {
@@ -399,31 +330,74 @@ export function buildScaffoldStep({
       const kids = parentToChildren[j] || []
       for (const k of kids) {
         const to = nextNodes[k].p
-        segments.push([from, to])
+        segs.push([from, to])
       }
     }
 
-  // Snap endpoints to actual layer polyline so scaffolding follows stretched shapes
-  const snapped = (layer?.polylines?.[0])
-    ? segments.map(([a, b]) => {
-        const vec = new THREE.Vector3(b[0], b[1], b[2])
-        const hit = nearestPointOnPolyline(layer, vec) || vec
-        return [a, [hit.x, hit.y, hit.z]]
-      })
-    : segments
+    // Snap endpoints to actual layer polyline so scaffolding follows stretched shapes
+    const snapped = (layer?.polylines?.[0])
+      ? segs.map(([a, b]) => {
+          const vec = new THREE.Vector3(b[0], b[1], b[2])
+          const hit = nearestPointOnPolyline(layer, vec) || vec
+          return [a, [hit.x, hit.y, hit.z]]
+        })
+      : segs
 
-  // Build the next ring as UNIQUE child nodes (count == nxtN), snapped and ordered by nextNodes index
-  const snapChild = (k) => {
-    const p = nextNodes[k]?.p || nextNodes[k]
-    const vec = new THREE.Vector3(p[0], p[1], p[2])
-    if (layer?.polylines?.[0]) {
-      const hit = nearestPointOnPolyline(layer, vec) || vec
-      return [hit.x, hit.y, hit.z]
+    // Build the next ring as UNIQUE child nodes (count == nxtN), snapped and ordered by nextNodes index
+    const snapChild = (k) => {
+      const p = nextNodes[k]?.p || nextNodes[k]
+      const vec = new THREE.Vector3(p[0], p[1], p[2])
+      if (layer?.polylines?.[0]) {
+        const hit = nearestPointOnPolyline(layer, vec) || vec
+        return [hit.x, hit.y, hit.z]
+      }
+      return [vec.x, vec.y, vec.z]
     }
-    return [vec.x, vec.y, vec.z]
+    const evenPtsSnapped = Array.from({ length: nxtN }, (_, k) => ({ p: snapChild(k) }))
+    const centerV = new THREE.Vector3(metaCenterArr[0], metaCenterArr[1], metaCenterArr[2])
+    const upV = new THREE.Vector3(up[0], up[1], up[2])
+    const nextCurrentNodes = buildNodes(evenPtsSnapped, centerV, upV, yNext, rNext)
+    nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
+
+    return { segments: snapped, nextCurrentNodes, parentToChildren }
   }
-  const nextCurrentNodes = Array.from({ length: nxtN }, (_, k) => ({ id: (k + 1) % Math.max(1, nxtN), p: snapChild(k) }))
+
+  // Final fallback: no polylines at all
+  const segs = []
+  for (let j = 0; j < curN; j++) {
+    const from = currentNodes[j].p
+    const kids = parentToChildren[j] || []
+    for (const k of kids) {
+      const to = nextNodes[k].p
+      segs.push([from, to])
+    }
+  }
+
+  const evenPts = nextNodes.map(n => ({ p: n.p }))
+  const ringCenterV = new THREE.Vector3(metaCenterArr[0], metaCenterArr[1], metaCenterArr[2])
+  const sphereCenterV = new THREE.Vector3(sphereCenter[0], sphereCenter[1], sphereCenter[2])
+  const upV = new THREE.Vector3(up[0], up[1], up[2]).normalize()
+  const hemiSign = Math.sign(ringCenterV.clone().sub(sphereCenterV).dot(upV)) || 1
+  const thisCirc = 2 * Math.PI * Math.max(1e-9, rNext)
+  if (layer?.meta?.shape === 'cone') {
+    const coneTilt = Number(layer?.meta?.coneTilt)
+    const rollFromCirc = Number.isFinite(coneTilt) ? coneTilt : (Math.PI / 4)
+    const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
+    nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
+    return { segments: segs, nextCurrentNodes, parentToChildren }
+  }
+  const effTiltScale = dynamicTiltScaleForLayer(layer)
+  let rollFromCirc = computeRollFromCircumference(thisCirc, Math.max(thisCirc, Number(maxCircumference) || thisCirc)) * effTiltScale
+  try {
+    const { latitude } = computeRingRollAngleFromCenter(ringCenterV, sphereCenterV, rNext, upV)
+    const mod = 0.5 + 0.5 * Math.abs(Math.sin(2 * latitude))
+    rollFromCirc *= mod
+  } catch (_) {}
+  // Legacy path has no polyline; skip stretch mod here
+  const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
   nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
 
-  return { segments: snapped, nextCurrentNodes, parentToChildren }
-}}
+  return { segments: segs, nextCurrentNodes, parentToChildren }
+}
+
+

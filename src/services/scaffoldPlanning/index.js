@@ -2,7 +2,6 @@ export { planScaffoldChain } from './planScaffoldChain'
 export { buildScaffoldStep } from './buildStep'
 export { mapConsecutiveBuckets } from './mapConsecutive'
 export { buildScaffoldSegments } from './buildScaffoldSegments'
-export { mapBuckets } from './mapBuckets'
 export * from './helpers'
 export { planScaffoldByObject } from './planByObject'
 

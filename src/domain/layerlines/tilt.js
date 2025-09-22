@@ -47,7 +47,14 @@ export function computeLayerTiltAngle(nodeRing, hint) {
   const eq = getEquatorCircumference(nodeRing, hint)
   if (eq <= 1e-9) return 0
   const ratio = Math.max(0, Math.min(1, cur / eq))
-  return (1 - ratio) * (Math.PI / 2)
+  const baseTilt = (1 - ratio) * (Math.PI / 2)
+  // Dynamic scale based on axis ratio if available (prefer hint, else meta)
+  const ax = Number(hint?.axisRatio ?? nodeRing?.meta?.axisRatio)
+  if (Number.isFinite(ax) && ax >= 1) {
+    const s = Math.max(0.6, Math.min(1.8, 2.4 - 0.6 * ax))
+    return baseTilt * s
+  }
+  return baseTilt
 }
 
 

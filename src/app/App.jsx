@@ -8,6 +8,7 @@ import Scene3D from '../ui/editor/Scene3D'
 import Home from '../ui/home/Home'
 import GalleryPage from '../ui/gallery/GalleryPage'
 import TutorialPage from '../ui/tutorial/TutorialPage'
+import DecorPage from '../ui/decor/DecorPage'
 import TopToolbar from '../ui/editor/TopToolbar'
 import LeftSidebar from '../ui/editor/LeftSidebar'
 import RightSidebar from '../ui/editor/RightSidebar'
@@ -33,6 +34,7 @@ function App() {
     if (pathname === '/editor') return '#/editor'
     if (pathname === '/gallery') return '#/gallery'
     if (pathname === '/tutorial') return '#/tutorial'
+    if (pathname === '/decor') return '#/decor'
     return '#/'
   })
 
@@ -43,6 +45,7 @@ function App() {
       if (pathname === '/editor') setRoute('#/editor')
       else if (pathname === '/gallery') setRoute('#/gallery')
       else if (pathname === '/tutorial') setRoute('#/tutorial')
+      else if (pathname === '/decor') setRoute('#/decor')
       else setRoute('#/')
     }
     window.addEventListener('hashchange', onHash)
@@ -92,6 +95,7 @@ function App() {
   if (route === '#/' || route === '' || route === '#') return <Home />
   if (route === '#/gallery') return <GalleryPage />
   if (route === '#/tutorial') return <TutorialPage />
+  if (route === '#/decor') return <DecorPage />
   if (route !== '#/editor') return <Home />
 
   return (

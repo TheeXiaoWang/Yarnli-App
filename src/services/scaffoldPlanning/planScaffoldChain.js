@@ -3,10 +3,12 @@ import { ringMetricsAlongAxisFromPoints } from '../../domain/nodes/utils/radius'
 import { polylineLength3D } from '../../domain/layerlines/circumference'
 import { polylineLengthProjected } from '../../domain/layerlines/circumference'
 import { buildScaffoldStep } from './buildStep'
+import { resetTiltTrend } from '../nodes/buildNodes'
 import { rotateLayerStart } from '../../domain/nodes/utils/rotateLayerStart'
+import { STITCH_TYPES } from '../../constants/stitchTypes'
 
 
-export function planScaffoldChain({ layers, startKey, centerV, axisDir, currentNodes, distributeNextNodes, countNextStitches, targetSpacing, increaseFactor = 1, decreaseFactor = 1, incMode = 'even', decMode = 'even', spacingMode = 'even' }) {
+export function planScaffoldChain({ layers, startKey, centerV, axisDir, currentNodes, distributeNextNodes, countNextStitches, targetSpacing, increaseFactor = 1, decreaseFactor = 1, incMode = 'even', decMode = 'even', spacingMode = 'even', tiltScale = 1.0 }) {
   
   console.log('[ScaffoldPlanner v1] planning', { layers: layers?.length ?? 0 })
   const chainSegments = []
@@ -20,6 +22,7 @@ export function planScaffoldChain({ layers, startKey, centerV, axisDir, currentN
   n.normalize()
   const axisOrigin = new THREE.Vector3(centerV.x, centerV.y, centerV.z).sub(n.clone().multiplyScalar(startKey))
   let lastYProcessed = null
+  let globalMaxCircumference = 0
 
   // Persistent anchor and flip state across layers
   let lastAnchorNode0 = null // [x,y,z]
@@ -32,6 +35,47 @@ export function planScaffoldChain({ layers, startKey, centerV, axisDir, currentN
     let sum = 0
     for (const poly of polys) sum += polylineLength3D(poly, false)
     return sum
+  }
+
+  // Helper function to detect if a layer is a cut layer (open polylines)
+  const isCutLayer = (layer) => {
+    return Array.isArray(layer?.polylines) && layer.polylines.length > 1
+  }
+
+
+  // Planner should not generate or mutate layer geometry here.
+
+
+  // Helper: whether this object's end/start pole is intersected by another object
+  const isPoleIntersected = (role) => {
+    try {
+      const poles = (window?.__LAYERLINE_MARKERS__?.poles || []).map((e) => (Array.isArray(e) ? { p: e } : e))
+      const match = poles.find((p) => (p?.objectId === layer?.objectId) && (p?.role === role) && (p?.intersected === true))
+      return !!match
+    } catch (_) { return false }
+  }
+
+  // Helper function to get stitch type for first/last layers
+  const getStitchType = (layer, isFirstLayer, isLastLayer) => {
+    const isCut = isCutLayer(layer)
+    if ((isFirstLayer || isLastLayer) && !isCut) {
+      // If the corresponding pole is intersected by another object, use regular sc instead of edge
+      if (isFirstLayer && isPoleIntersected('start')) return 'sc'
+      if (isLastLayer && isPoleIntersected('end')) return 'sc'
+      return 'edge'  // Use edge stitch type when not intersected
+    }
+    return 'sc'  // Default to single crochet
+  }
+
+  // Helper function to calculate actual yarn width based on stitch type
+  // The yarn width represents spacing between stitches, not the size of the stitches
+  // For smaller nodes, we want tighter spacing to create proper density
+  const getYarnWidthForStitchType = (stitchType, baseYarnWidth) => {
+    const stitchProfile = STITCH_TYPES[stitchType] || STITCH_TYPES.sc
+    const widthMultiplier = stitchProfile.widthMul || 1.0
+    // Spacing follows node width, scaled by a fixed packing factor
+    const PF = 0.9
+    return baseYarnWidth * widthMultiplier * PF
   }
 
   // Rotate nodes so that the entry closest to anchor becomes index 0
@@ -54,7 +98,56 @@ export function planScaffoldChain({ layers, startKey, centerV, axisDir, currentN
   // Reassign ids to match array order (id 0 becomes first)
   const reassignIdsSequential = (nodes) => nodes.map((e, i) => ({ ...e, id: i }))
 
-  for (const layer of layers) {
+  // Pre-scan for global maximum circumference
+  for (let i = 0; i < layers.length; i++) {
+    const layer = layers[i]
+    let yTmp = Number(layer.y)
+    const polyTmp = layer?.polylines?.[0]
+    if (Array.isArray(polyTmp) && polyTmp.length > 0) {
+      const mid = polyTmp[Math.floor(polyTmp.length / 2)]
+      if (Array.isArray(mid) && mid.length === 3) {
+        const mv = new THREE.Vector3(mid[0], mid[1], mid[2])
+        const delta = mv.clone().sub(centerV)
+        yTmp = startKey + n.dot(delta)
+      }
+    }
+    const centerAtTmp = axisOrigin.clone().add(n.clone().multiplyScalar(yTmp))
+    const projectedCircTmp = Array.isArray(polyTmp) ? polylineLengthProjected(polyTmp, [centerAtTmp.x, centerAtTmp.y, centerAtTmp.z], [n.x, n.y, n.z]) : 0
+    const rTmp = projectedCircTmp > 0 ? (projectedCircTmp / (2 * Math.PI)) : (ringMetricsAlongAxisFromPoints(polyTmp || [], [centerAtTmp.x, centerAtTmp.y, centerAtTmp.z], [n.x, n.y, n.z]).radius || 1)
+    const L_vis_tmp = Array.isArray(layer?.polylines) && layer.polylines.length > 0 ? layer.polylines.reduce((s, p) => s + polylineLength3D(p, false), 0) : 0
+    const circTmp = L_vis_tmp > 0 ? L_vis_tmp : (2 * Math.PI * Math.max(1e-9, rTmp))
+    if (circTmp > globalMaxCircumference) globalMaxCircumference = circTmp
+  }
+
+  // Ensure layers are processed from the start pole toward the end pole.
+  const orderedLayers = (() => {
+    const out = []
+    for (let i = 0; i < layers.length; i++) {
+      const layer = layers[i]
+      let yTmp = Number(layer.y)
+      const polyTmp = layer?.polylines?.[0]
+      if (Array.isArray(polyTmp) && polyTmp.length > 0) {
+        const mid = polyTmp[Math.floor(polyTmp.length / 2)]
+        if (Array.isArray(mid) && mid.length === 3) {
+          const mv = new THREE.Vector3(mid[0], mid[1], mid[2])
+          const delta = mv.clone().sub(centerV)
+          yTmp = startKey + n.dot(delta)
+        }
+      }
+      out.push({ layer, key: yTmp })
+    }
+    out.sort((a, b) => a.key - b.key)
+    return out
+  })()
+
+  // Ensure first ring in this planning pass starts with positive tilt sign
+  try { resetTiltTrend() } catch (_) {}
+
+  for (let ringIndex = 0; ringIndex < orderedLayers.length; ringIndex++) {
+    const layer = orderedLayers[ringIndex].layer
+    const isFirstLayer = ringIndex === 0
+    const isLastLayer = ringIndex === orderedLayers.length - 1
+    
     // Use projection along normalized axis for ordering/param
     let yNext = Number(layer.y)
     const poly = layer?.polylines?.[0]
@@ -80,7 +173,10 @@ export function planScaffoldChain({ layers, startKey, centerV, axisDir, currentN
     // Prefer true visible 3D length for cut layers; fallback to analytic circle when absent
     const L_vis = totalVisibleLength(layer)
     const fullCircle = 2 * Math.PI * Math.max(1e-9, rNext)
-    const nextCircumference = L_vis > 0 ? L_vis : fullCircle
+    let nextCircumference = L_vis > 0 ? L_vis : fullCircle
+    
+    // Do not override the last layer length; use the visible perimeter if present
+    
     // DEV diagnostics: ensure visible perimeter is being used
     if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
       try {
@@ -102,11 +198,18 @@ export function planScaffoldChain({ layers, startKey, centerV, axisDir, currentN
     const centerPrev = axisOrigin.clone().add(n.clone().multiplyScalar(tPrev))
     const { circumference: curCirc } = ringMetricsAlongAxisFromPoints(prev.map(e => e.p), [centerPrev.x, centerPrev.y, centerPrev.z], [n.x, n.y, n.z])
     const nextCirc = 2 * Math.PI * rNext
+    
+    // Get stitch type for this layer
+    const stitchType = getStitchType(layer, isFirstLayer, isLastLayer)
+    
+    // Calculate yarn width based on the actual stitch type that will be used
+    const actualYarnWidth = getYarnWidthForStitchType(stitchType, targetSpacing)
+    
     let { nextCount } = countNextStitches({
       currentCount: prev.length,
       currentCircumference: curCirc,
       nextCircumference: nextCircumference,
-      yarnWidth: targetSpacing,
+      yarnWidth: actualYarnWidth, // Use stitch type's actual width for proper spacing
       increaseFactor,
       decreaseFactor,
       spacingMode,
@@ -133,10 +236,14 @@ export function planScaffoldChain({ layers, startKey, centerV, axisDir, currentN
       rNext,
       nextCount,
       center: [centerAt.x, centerAt.y, centerAt.z],
+      sphereCenter: [centerV.x, centerV.y, centerV.z],
+      maxCircumference: globalMaxCircumference,
       up: [n.x, n.y, n.z],
       distributeNextNodes,
       aRef: (typeof aRef !== 'undefined' ? aRef : null),
-      yarnWidth: targetSpacing,
+      yarnWidth: actualYarnWidth, // Use stitch type's actual width for proper distribution
+      stitchType: stitchType, // This will handle the visual size difference
+      tiltScale: Number(tiltScale) || 1.0,
     })
 
     // Cross-layer anchoring and serpentine flipping

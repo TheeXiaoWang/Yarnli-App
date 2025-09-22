@@ -50,14 +50,10 @@ export function buildStep({ layer, currentNodes, currentRadius, centerV, axisDir
       })
     : contiguous
 
-  // Filter inter-layer using axis projection
-  const ax = axisDir
-  const eps = 1e-4
-  let interLayer = (snapped || []).filter(([a,b]) => {
-    const da = a[0]*ax.x + a[1]*ax.y + a[2]*ax.z
-    const db = b[0]*ax.x + b[1]*ax.y + b[2]*ax.z
-    return Math.abs(db - da) >= eps
-  })
+  // For cones and tilted objects, tiny numerical differences along the axis can
+  // zero-out when rings are very close. Do not drop segments by axial delta here.
+  // Keep all contiguous segments and let downstream logic handle degenerate cases.
+  let interLayer = (snapped || [])
 
   // Sanity: if shrank, keep <=1 per parent
   if (nextRing.length <= currentNodes.length) {

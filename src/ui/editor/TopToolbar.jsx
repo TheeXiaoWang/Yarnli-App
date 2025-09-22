@@ -107,6 +107,10 @@ const TopToolbar = ({ onOpenResolution }) => {
       <Menu title="Display" name="display">
         <Item label="Resolution…" onClick={onOpenResolution} />
       </Menu>
+
+      <Menu title="Decor" name="decor">
+        <Item label="Open Decor Mode" onClick={() => { window.location.hash = '#/decor' }} />
+      </Menu>
     </div>
   )
 }

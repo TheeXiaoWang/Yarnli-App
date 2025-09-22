@@ -16,7 +16,7 @@ import { getFirstLayerRing } from '../../../layerlines/layerUtils'
  * Outputs:
  * - { S0, anchor: { center:[x,y,z], normal:[x,y,z], radius:number, key:number }, ring: number[][]|null }
  */
-export function firstLayerPlanner({ layers, firstRing = null, startCenter, endCenter, ringPlaneNormal, stitchGauge, tightenFactor = 1.0 }) {
+export function firstLayerPlanner({ layers, firstRing = null, startCenter, endCenter, ringPlaneNormal, stitchGauge }) {
   const c = startCenter instanceof THREE.Vector3
     ? startCenter.clone()
     : new THREE.Vector3(Number(startCenter?.x)||0, Number(startCenter?.y)||0, Number(startCenter?.z)||0)
@@ -39,7 +39,7 @@ export function firstLayerPlanner({ layers, firstRing = null, startCenter, endCe
     : getFirstLayerRing(layers, c)
 
   const gaugeW = Math.max(1e-6, Number(stitchGauge?.width) || 0)
-  const factor = Math.max(0.1, Math.min(2.0, Number(tightenFactor) || 0.8))
+  const factor = 0.9
 
   if (!ring || ring.length < 3) {
     // Fallback: no ring available; return neutral plan using MR plane

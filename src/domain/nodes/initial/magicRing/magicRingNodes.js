@@ -23,14 +23,14 @@ export function computeMagicRingNodes({
   endCenter,
   ringPlaneNormal,
   handedness = 'right',
-  tightenFactor = 1.0,
+  tightenFactor = 0.9,
   firstRing = null, // optional: polyline points [[x,y,z]...]
   debugLogs = true,
   nextRing = null, // optional: second ring to infer oval direction/chain
   overrideStitchCount = null, // if set, force S0 to this value
 }) {
   const gaugeW = Math.max(1e-6, Number(stitchGauge?.width) || 0)
-  const factor = Math.max(0.1, Math.min(2.0, Number(tightenFactor) || 0.8))
+  const factor = 0.9
 
   // Plane definition: prefer explicit center/normal; else fall back to MR-Count plane if provided
   const n = new THREE.Vector3(

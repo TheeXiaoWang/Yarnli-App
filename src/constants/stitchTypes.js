@@ -39,35 +39,14 @@ export const STITCH_TYPES = {
     color:  0xff7f0e,
     width: 1.0, height: 2.0, depth: 0.5,
   },
-  inc: {
-    widthMul: 1.4, // wider
-    heightMul: 1.0,
-    depthMul: 0.5,
-    color:  0xffd700,
-    width: 1.4, height: 1.0, depth: 0.5,
-  },
-  dec: {
-    widthMul: 0.7, // narrower
-    heightMul: 1.0,
-    depthMul: 0.5,
-    color:  0x8b0000,
-    width: 0.7, height: 1.0, depth: 0.5,
-  },
-  slst: {
-    widthMul: 0.7,
-    heightMul: 0.3,
-    depthMul: 0.5,
-    color:  0x777777,
-    width: 0.7, height: 0.3, depth: 0.5,
-  },
-  // Magic ring: same baseline as single crochet
-  mr: {
-    name: "magic ring",
-    widthMul: 1,
-    heightMul: 0.7,
-    depthMul: 0.5,
+  // Edge layer: 0.6x size of single crochet for tighter first and last layers
+  edge: {
+    name: "edge layer",
+    widthMul: 1,   // 0.6x of single crochet width
+    heightMul: 1,  // 0.6x of single crochet height
+    depthMul: 0.6,   // 0.6x of single crochet depth
     color:  0x1f77b4,
-    width: 1, height: 0.7, depth: 0.5,
+    width: 0.6, height: 0.6, depth: 0.6,
   },
 }
 

@@ -86,6 +86,50 @@ const SceneObject = ({ object, isSelected }) => {
     )
   }, [object.position, object.scale, object.rotation, isDragging])
 
+  // Expose ALL objects globally for decor scene
+  React.useEffect(() => {
+    console.log('🟨 SceneObject effect - meshRef:', !!meshRef.current, 'objectId:', object.id, 'objectType:', object.type)
+    console.log('🟨 Object data:', { id: object.id, type: object.type, position: object.position, scale: object.scale })
+    
+    if (meshRef.current) {
+      // Initialize the global array if it doesn't exist
+      if (!window.__EDITOR_ALL_OBJECTS__) {
+        window.__EDITOR_ALL_OBJECTS__ = []
+        console.log('🟨 Created new global array')
+      }
+      
+      // Remove this object if it was already in the array
+      const beforeLength = window.__EDITOR_ALL_OBJECTS__.length
+      window.__EDITOR_ALL_OBJECTS__ = window.__EDITOR_ALL_OBJECTS__.filter(obj => obj.id !== object.id)
+      if (window.__EDITOR_ALL_OBJECTS__.length < beforeLength) {
+        console.log('🟨 Removed existing object from global array')
+      }
+      
+      // Add this object to the global array
+      window.__EDITOR_ALL_OBJECTS__.push({
+        id: object.id,
+        mesh: meshRef.current,
+        object: object
+      })
+      
+      console.log('🟨 EXPOSED editor object to global array:', object.id, object.type)
+      console.log('🟨 Object scale:', object.scale)
+      console.log('🟨 Total objects in global array:', window.__EDITOR_ALL_OBJECTS__.length)
+      console.log('🟨 Global array contents:', window.__EDITOR_ALL_OBJECTS__)
+    } else {
+      console.log('🟨 No meshRef.current - object not ready yet')
+    }
+  }, [object.id, object.type, object.position, object.scale, object.rotation])
+
+  // Clean up when component unmounts - but keep objects in global array for decor
+  React.useEffect(() => {
+    return () => {
+      // Don't remove objects from global array when unmounting
+      // This allows decor page to access editor objects even after switching pages
+      console.log('🟨 SceneObject unmounting - keeping object in global array for decor:', object.id)
+    }
+  }, [object.id])
+
   // Animation frame update - only when not being transformed
   useFrame(() => {
     if (meshRef.current && !isSelected && !isDragging) {

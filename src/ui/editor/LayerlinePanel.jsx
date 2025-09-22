@@ -90,6 +90,8 @@ const LayerlinePanel = () => {
         </Select>
       </Row>
 
+      {/* Sphere Tilt Scale removed: now computed dynamically from axis ratio */}
+
       <Row label="Show Full Scaffold">
         <input
           type="checkbox"
@@ -225,16 +227,8 @@ const LayerlinePanel = () => {
         <div className="property-item" style={{ marginTop: 8 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ minWidth: 120 }}>Tighten Factor:</span>
-            <input
-              type="range"
-              min="0.1"
-              max="2.0"
-              step="0.1"
-              value={settings.tightenFactor || 0.8}
-              onChange={(e) => setSettings({ tightenFactor: parseFloat(e.target.value) })}
-              style={{ flex: 1 }}
-            />
-            <span style={{ minWidth: 30, textAlign: 'right' }}>{settings.tightenFactor || 0.8}</span>
+            <div style={{ flex: 1, opacity: 0.6 }}>locked at 0.9</div>
+            <span style={{ minWidth: 30, textAlign: 'right' }}>0.9</span>
           </label>
         </div>
         <div className="property-item" style={{ marginTop: 8 }}>

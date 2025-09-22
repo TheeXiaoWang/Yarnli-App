@@ -1,9 +1,11 @@
 import React from 'react'
 import { useSceneStore } from '../../app/stores/sceneStore'
+import { useNodeStore } from '../../app/stores/nodeStore'
 import LayerlinePanel from './LayerlinePanel'
 
 const RightSidebar = () => {
   const { objects, selectedObject, toggleObjectVisibility, toggleAllVisibility, setPriorityOverride } = useSceneStore()
+  const { ui, setVisibility } = useNodeStore()
 
   const getObjectInfo = () => {
     if (!selectedObject) return null
@@ -92,6 +94,17 @@ const RightSidebar = () => {
 
       {/* Layerline Panel */}
       <LayerlinePanel />
+
+      {/* Debug Toggles */}
+      <div className="properties-section">
+        <h3>Debug</h3>
+        <div className="property-item" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <span className="property-label">Axes Helper (node 0 per ring)</span>
+          <button className="btn" onClick={() => setVisibility({ showAxesHelper: !ui.showAxesHelper })}>
+            {ui.showAxesHelper ? 'Hide' : 'Show'}
+          </button>
+        </div>
+      </div>
 
       {/* Camera Information */}
       <div className="properties-section">

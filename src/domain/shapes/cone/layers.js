@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { buildObjectMatrix, createGeometryForType, stitchSegmentsToPolylines } from '../../layerlines/common'
 import { computeStitchDimensions } from '../../layerlines/stitches'
+import { desiredFirstCircumference, solveFirstGap, conePerimeterAtDistanceFactory } from '../../layerlines/firstGap'
+import { STITCH_TYPES } from '../../../constants/stitchTypes'
 
 export function generateConeLayers(object, settings, maxLayers) {
   const matrix = buildObjectMatrix(object)
@@ -14,7 +16,7 @@ export function generateConeLayers(object, settings, maxLayers) {
     baseHeight: 1,
     baseWidth: 1,
   })
-  const step = Math.max(stitchH, 0.0005)
+  const stitchStep = Math.max(stitchH, 0.0005)
 
   // For cones, the pole is the tip (local +Y after transform)
   const axisCol = new THREE.Vector3().setFromMatrixColumn(matrix, 1)
@@ -24,29 +26,43 @@ export function generateConeLayers(object, settings, maxLayers) {
   const base = baseLocal.clone().applyMatrix4(matrix)
   const dir = base.clone().sub(apex).normalize() // ensure axis points from apex → base
   const axisScale = axisCol.length()
-  // Ensure at least one ring near the apex for typical yarn sizes
-  const firstGap = Math.max(step * 0.75, axisScale * 0.05)
+  // Ensure first ring perimeter can fit 5 edge stitches tightly
+  const desiredCirc = desiredFirstCircumference(settings)
+  const c0w = new THREE.Vector3().setFromMatrixColumn(matrix, 0)
+  const c2w = new THREE.Vector3().setFromMatrixColumn(matrix, 2)
+  const projW = (v) => v.clone().sub(dir.clone().multiplyScalar(v.dot(dir)))
+  const aW = projW(c0w).length()
+  const bW = projW(c2w).length()
+  const axisLen = axisCol.length()
   const heightWorld = base.clone().sub(apex).length()
-  // Exact-step spacing: shift start so last ring lands at base, keep step == yarn size
+  const perimeterAt = conePerimeterAtDistanceFactory({ matrix, dir })
+  const solvedGap = solveFirstGap({ targetCircumference: desiredCirc, upperBound: heightWorld, perimeterAt })
+  // Derive cone slope ratio dr/dt along the side to align spacing to stitch height
+  const avgInPlane = (aW + bW) * 0.5
+  const kSlope = Math.max(1e-9, avgInPlane / (2 * Math.max(1e-9, axisScale)))
+  // Axis step so that slant-distance between rings ≈ stitch height: dt = H / sqrt(1 + k^2)
+  const axisStep = Math.max(stitchStep / Math.sqrt(1 + kSlope * kSlope), 0.0005)
+  const radialStep = stitchStep
+  const firstGap = Math.max(solvedGap, axisStep * 0.75, axisScale * 0.01)
+  
+  // Exact-step spacing starting from the solved firstGap:
+  // place the first ring at firstGap and step outward by yarn step.
   const usable = Math.max(0, heightWorld - firstGap)
-  let ringCount = Math.max(1, Math.min(maxLayers, Math.floor(usable / step)))
-  // If the apex region would be left without a ring due to rounding, add one more
-  if (ringCount >= 1 && (heightWorld - ringCount * step) < firstGap * 0.25) {
-    ringCount = Math.min(maxLayers, ringCount + 1)
-  }
-  // Shift offset so t_i = offset + i*step and t_ringCount == heightWorld
-  let offset = heightWorld - ringCount * step
-  // Ensure offset respects minimal first gap; if not, reduce ringCount
-  while (ringCount > 1 && offset < firstGap - 1e-6) {
+  let ringCount = Math.max(1, Math.min(maxLayers, Math.floor(usable / axisStep) + 1))
+  let offset = firstGap - axisStep // so that offset + axisStep == firstGap
+  // Ensure the last ring does not exceed the base plane
+  while (ringCount > 1 && (offset + ringCount * axisStep) > heightWorld + 1e-6) {
     ringCount -= 1
-    offset = heightWorld - ringCount * step
   }
 
   const layers = []
+  // Precompute cone side tilt angle (constant) from world scaling
+  // For a right circular cone r = k * d (radius grows linearly with axis distance).
+  // Here, k ≈ avg(in-plane scales) / (2 * axisScale).
+  const coneTiltRad = Math.atan(kSlope)
   let lastTAxis = 0
   for (let i = 1; i <= ringCount; i++) {
-    let tAxis = offset + i * step // world distance from apex along axis
-    if (i === ringCount) tAxis = heightWorld // snap last ring to base edge
+    let tAxis = offset + i * axisStep // world distance from apex along axis
     if (tAxis > heightWorld + 1e-6) break
     const center = apex.clone().add(dir.clone().multiplyScalar(tAxis))
     // Local radius at this axis distance: in unit cone r_local = d/2 where d=axis distance in local
@@ -76,7 +92,7 @@ export function generateConeLayers(object, settings, maxLayers) {
       ring.push([p.x, p.y, p.z])
     }
     ring.push([...ring[0]])
-    layers.push({ y: center.dot(dir), polylines: [ring], debugSource: { file: 'src/layerlines/cone.js', fn: 'generateConeLayers', kind: 'cone-ring', i } })
+    layers.push({ y: center.dot(dir), polylines: [ring], meta: { shape: 'cone', isBase: false, coneTilt: coneTiltRad }, debugSource: { file: 'src/layerlines/cone.js', fn: 'generateConeLayers', kind: 'cone-ring', i } })
     lastTAxis = tAxis
   }
   // Removed forced base corner and base cap layers; spacing is adjusted slightly so last ring naturally
@@ -95,8 +111,8 @@ export function generateConeLayers(object, settings, maxLayers) {
       const centerBase = base.clone()
       const segments = 128
       for (let n = 1; ; n++) { // start at 1 to avoid duplicating the rim ring
-        const aN = aRim - n * step
-        const bN = bRim - n * step
+        const aN = aRim - n * radialStep
+        const bN = bRim - n * radialStep
         if (aN <= 1e-6 || bN <= 1e-6) break
         const ring = []
         for (let s = 0; s < segments; s++) {
@@ -107,13 +123,16 @@ export function generateConeLayers(object, settings, maxLayers) {
           ring.push([p.x, p.y, p.z])
         }
         ring.push([...ring[0]])
-        layers.push({ y: centerBase.dot(dir), polylines: [ring], debugSource: { file: 'src/layerlines/cone.js', fn: 'generateConeLayers', kind: 'cone-base', n } })
+        layers.push({ y: centerBase.dot(dir), polylines: [ring], meta: { shape: 'cone', isBase: true, coneTilt: Math.PI / 2 }, debugSource: { file: 'src/layerlines/cone.js', fn: 'generateConeLayers', kind: 'cone-base', n } })
       }
     }
   }
 
-  // Markers: apex and base poles
-  const markers = { poles: [[apex.x, apex.y, apex.z], [base.x, base.y, base.z]], ring0: [] }
+  // Markers: apex is start, base is end (tip-first planning)
+  const markers = { poles: [
+    { p: [apex.x, apex.y, apex.z], role: 'start', objectId: object?.id },
+    { p: [base.x, base.y, base.z], role: 'end', objectId: object?.id },
+  ], ring0: [] }
   if (layers.length > 0 && layers[0].polylines.length > 0) {
     // take the longest polyline as the main ring
     const ring = layers[0].polylines.reduce((a, b) => (b.length > a.length ? b : a))

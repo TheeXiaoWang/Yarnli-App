@@ -160,6 +160,7 @@ export function planScaffoldByObject({
       incMode,
       decMode,
       spacingMode,
+      // tiltScale parameter retained for compatibility but ignored (dynamic per-layer)
     })
     // Inject anchor into each build step by passing through store-level distributeNextNodes wrapper
     // Not altering planScaffoldChain; it forwards the args into buildStep which accepts aRef

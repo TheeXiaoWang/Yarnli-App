@@ -229,7 +229,20 @@ export function generateLayerLines(objects, settings) {
         const pos = e.p
         const role = e.role
         if (Array.isArray(pos) && pos.length === 3) {
-          markers.poles.push({ p: pos, role, objectId: obj.id, objectType: obj.type })
+          // Mark if this pole lies within any cutter's bounding box (approximate intersection)
+          let intersected = false
+          try {
+            for (const cutter of cutters) {
+              const bb = computeObjectBBox(cutter)
+              if (!bb) continue
+              const min = bb.min, max = bb.max
+              const x = pos[0], y = pos[1], z = pos[2]
+              if (x >= min[0] - 1e-6 && x <= max[0] + 1e-6 &&
+                  y >= min[1] - 1e-6 && y <= max[1] + 1e-6 &&
+                  z >= min[2] - 1e-6 && z <= max[2] + 1e-6) { intersected = true; break }
+            }
+          } catch (_) {}
+          markers.poles.push({ p: pos, role, objectId: obj.id, objectType: obj.type, intersected })
         }
       }
     }
