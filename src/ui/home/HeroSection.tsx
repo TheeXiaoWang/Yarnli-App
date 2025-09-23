@@ -28,7 +28,7 @@ const HeroSection = () => {
           </h1>
 
           {/* Simple description */}
-          <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-2xl mx-auto">
+          <p className="text-xl md:text-2xl text-gray-500 mb-12 max-w-2xl mx-auto">
             Design and share yarn art with our CAD tools. Connect with fellow artists and bring your creative visions to life.
           </p>
 

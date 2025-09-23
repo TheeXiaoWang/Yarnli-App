@@ -127,25 +127,9 @@ All colors MUST be HSL.
     border-color: hsl(var(--border));
   }
 
-    border-color: hsl(var(--border));
-    @apply bg-background text-foreground;
-    background: var(--gradient-yarn-soft);
-    position: relative;
+  body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
-  
-  body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-image: radial-gradient(circle at 20% 20%, hsl(var(--accent) / 0.05) 1px, transparent 1px),
-  }
-
-  body {
-    @apply bg-background text-foreground;
     background: var(--gradient-yarn-soft);
     position: relative;
   }
@@ -168,7 +152,7 @@ All colors MUST be HSL.
 @layer components {
   /* Handcrafted yarn community styles */
   .yarn-button {
-    @apply bg-[var(--gradient-yarn-primary)] text-primary-foreground shadow-[var(--shadow-yarn-medium)] 
+    @apply bg-[var(--gradient-yarn-primary)] text-white shadow-[var(--shadow-yarn-medium)] 
            hover:shadow-[var(--shadow-yarn-glow)] transition-[var(--transition-yarn)]
            border-0 hover:scale-[1.03] rounded-xl;
   }

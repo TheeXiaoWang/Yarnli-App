@@ -82,7 +82,7 @@ const FunnelCarousel = () => {
                         <p className="text-primary font-semibold mb-4">
                           {slide.subtitle}
                         </p>
-                        <p className="text-muted-foreground text-sm mb-6">
+                        <p className="text-gray-500 text-sm mb-6">
                           {slide.description}
                         </p>
                       </div>
@@ -104,7 +104,7 @@ const FunnelCarousel = () => {
 
           {/* Bottom CTA */}
           <div className="text-center mt-16">
-            <p className="text-lg text-muted-foreground mb-6">
+            <p className="text-lg text-gray-500 mb-6">
               Ready to start your yarn art journey?
             </p>
             <a href="#/signup" className="yarn-button group text-lg px-8 py-4 inline-flex items-center justify-center rounded-xl">

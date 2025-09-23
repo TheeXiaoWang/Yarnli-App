@@ -48,7 +48,7 @@ const PatternCard = ({ pattern }: PatternCardProps) => {
 
       <div className="space-y-4 p-4 pt-0">
         {/* Description */}
-        <p className="text-sm text-muted-foreground leading-relaxed">
+        <p className="text-sm text-gray-500 leading-relaxed">
           {pattern.description}
         </p>
 
@@ -56,7 +56,7 @@ const PatternCard = ({ pattern }: PatternCardProps) => {
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-1">
             <span>⏱</span>
-            <span className="text-muted-foreground">{pattern.timeToLearn}</span>
+            <span className="text-gray-500">{pattern.timeToLearn}</span>
           </div>
           <span 
             className={`text-xs px-2 py-0.5 rounded border ${
@@ -71,15 +71,15 @@ const PatternCard = ({ pattern }: PatternCardProps) => {
 
         {/* Uses */}
         <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Common Uses</p>
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Common Uses</p>
           <div className="flex flex-wrap gap-1">
             {pattern.uses.slice(0, 2).map((use, index) => (
-              <span key={index} className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded">
+              <span key={index} className="text-xs bg-muted text-gray-500 px-2 py-1 rounded">
                 {use}
               </span>
             ))}
             {pattern.uses.length > 2 && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-gray-500">
                 +{pattern.uses.length - 2} more
               </span>
             )}
@@ -96,7 +96,7 @@ const PatternCard = ({ pattern }: PatternCardProps) => {
         {pattern.tips && (
           <div className="bg-muted/50 p-3 rounded-lg border-l-4 border-primary/50">
             <p className="text-xs font-medium text-foreground mb-1">💡 Pro Tip</p>
-            <p className="text-xs text-muted-foreground">{pattern.tips}</p>
+            <p className="text-xs text-gray-500">{pattern.tips}</p>
           </div>
         )}
       </div>

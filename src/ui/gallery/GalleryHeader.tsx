@@ -7,7 +7,7 @@ const GalleryHeader = () => {
             Gallery
           </span>
         </h1>
-        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+        <p className="text-xl text-gray-500 max-w-2xl mx-auto">
           Discover amazing yarn art creations from our talented community of artists
         </p>
       </div>

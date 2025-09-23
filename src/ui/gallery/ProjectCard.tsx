@@ -89,11 +89,11 @@ const ProjectCard = ({ project }: ProjectCardProps) => {
           <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[10px]">
             {project.artist.split(' ').map(n => n[0]).join('')}
           </div>
-          <span className="text-xs text-muted-foreground truncate">{project.artist}</span>
+          <span className="text-xs text-gray-500 truncate">{project.artist}</span>
         </div>
 
         {/* Quick Info */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <div className="flex items-center gap-1">
             <span>⏱</span>
             <span>{project.timeToComplete.split('-')[0]}h</span>
@@ -111,7 +111,7 @@ const ProjectCard = ({ project }: ProjectCardProps) => {
 
         {/* Color Palette Preview */}
         <div className="flex items-center gap-2">
-          <span className="h-3 w-3 text-muted-foreground">🎨</span>
+          <span className="h-3 w-3 text-gray-500">🎨</span>
           <div className="flex gap-1 flex-1">
             {project.colors.slice(0, 3).map((color, index) => (
               <div 
@@ -122,7 +122,7 @@ const ProjectCard = ({ project }: ProjectCardProps) => {
             ))}
             {project.colors.length > 3 && (
               <div className="w-3 h-3 rounded-full bg-muted flex items-center justify-center">
-                <span className="text-[6px] text-muted-foreground font-medium">+{project.colors.length - 3}</span>
+                <span className="text-[6px] text-gray-500 font-medium">+{project.colors.length - 3}</span>
               </div>
             )}
           </div>
@@ -130,7 +130,7 @@ const ProjectCard = ({ project }: ProjectCardProps) => {
 
         {/* Stats */}
         <div className="flex items-center justify-between pt-1 border-t" style={{borderColor: 'hsl(var(--border))'}}>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 text-xs text-gray-500">
             <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer">
               <span>❤</span>
               <span>{project.likes}</span>

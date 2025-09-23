@@ -15,14 +15,14 @@ const TutorialFilters = ({ categories, activeFilter, onFilterChange, patternCoun
           key={category}
           className={`px-4 py-2 rounded-xl border transition-all duration-200 ${
             category === activeFilter 
-              ? "yarn-button bg-primary text-primary-foreground shadow-md scale-105" 
+              ? "yarn-button bg-primary text-white shadow-md scale-105" 
               : "yarn-card hover:bg-primary/10 hover:border-primary/50"
           }`}
           onClick={() => onFilterChange(category)}
         >
           <span>{category}</span>
           {category !== "All" && (
-            <span className="ml-2 text-xs bg-background/50 rounded px-2 py-0.5 border">
+            <span className="ml-2 text-xs bg-card/50 rounded px-2 py-0.5 border">
               {patternCounts[category] || 0}
             </span>
           )}
