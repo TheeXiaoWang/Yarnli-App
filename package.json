@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
-    "build": "node build.js",
-    "build:vite": "npx vite build",
+    "build": "node -e \"require('child_process').execSync('npx vite build', {stdio: 'inherit'})\"",
+    "build:direct": "npx vite build",
     "preview": "vite preview"
   },
   "dependencies": {
