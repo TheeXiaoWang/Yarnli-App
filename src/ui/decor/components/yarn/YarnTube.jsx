@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import * as THREE from 'three'
 import { calculateYarnBendOffset } from './yarnUtils'
 import { calculateEllipsoidOrbitalPath } from './ellipsoidOrbitalUtils'
+import { calculateConeOrbitalPath } from './coneOrbitalUtils'
 
 const YarnTube = ({ start, end, radius = 0.06, color = null, id = null, selected = false, onSelect = null, onDelete = null, nodeDepth = null, orbitalDistance = 0.15, center = null, sourceObject = null, curvature = 0.0 }) => {
     const curve = useMemo(() => {
@@ -15,11 +16,22 @@ const YarnTube = ({ start, end, radius = 0.06, color = null, id = null, selected
             orbitalDistance: orbitalDistance
         })
         
-        // Use ellipsoid orbital logic if source object is available
+        // Use shape-specific orbital logic if source object is available
         if (sourceObject) {
-            console.log('🟡 Using ellipsoid orbital path with curvature:', curvature)
-            const orbitalPoints = calculateEllipsoidOrbitalPath(a, b, sourceObject, orbitalDistance, curvature)
-            return new THREE.CatmullRomCurve3(orbitalPoints)
+            console.log('🟡 Using shape-specific orbital path for:', sourceObject.type, 'with curvature:', curvature)
+            
+            if (sourceObject.type === 'cone') {
+                const orbitalPoints = calculateConeOrbitalPath(a, b, sourceObject, orbitalDistance, curvature)
+                return new THREE.CatmullRomCurve3(orbitalPoints)
+            } else if (sourceObject.type === 'sphere') {
+                const orbitalPoints = calculateEllipsoidOrbitalPath(a, b, sourceObject, orbitalDistance, curvature)
+                return new THREE.CatmullRomCurve3(orbitalPoints)
+            } else {
+                // For other object types, use ellipsoid as fallback
+                console.log('🟡 Using ellipsoid orbital path as fallback for object type:', sourceObject.type)
+                const orbitalPoints = calculateEllipsoidOrbitalPath(a, b, sourceObject, orbitalDistance, curvature)
+                return new THREE.CatmullRomCurve3(orbitalPoints)
+            }
         }
         
         console.log('🟡 Falling back to sphere orbital path')

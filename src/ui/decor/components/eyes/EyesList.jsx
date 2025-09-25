@@ -1,10 +1,12 @@
 import React from 'react'
 import EyeFromQuaternion from './EyeFromQuaternion'
+import { useDecorStore } from '../../../../app/stores/decorStore'
 
 const EyesList = ({ eyes, hoverPreview, settings, yarnRadiusFromLevel, eyeScale, center }) => {
+  const { hiddenItems } = useDecorStore()
   return (
     <>
-      {eyes.map(e => (
+      {eyes.filter(e => !hiddenItems?.has?.(`eye:${e.id}`)).map(e => (
         <EyeFromQuaternion
           key={`eye-${e.id}`}
           position={e.position}

@@ -5,6 +5,8 @@ import { useSceneStore } from '../../app/stores/sceneStore'
 import { useDecorStore } from '../../app/stores/decorStore'
 import * as THREE from 'three'
 import { useThree } from '@react-three/fiber'
+import { computeStitchDimensions } from '../../domain/layerlines/stitches'
+import { STITCH_TYPES } from '../../constants/stitchTypes'
 import GridPoints from './components/grid/GridPoints'
 import EyesList from './components/eyes/EyesList'
 import YarnList from './components/yarn/YarnList'
@@ -65,6 +67,65 @@ const DecorScene = () => {
         console.log('🟪 Global editor objects length:', window.__EDITOR_ALL_OBJECTS__?.length || 0)
     }, []) // Empty dependency array - run once on mount
     const { tool, showGridPoints, alwaysShowAllNodes, addEyeAt, startOrFinishYarnAt, eyes, yarns, feltPieces, pendingYarnStart, selectedYarnId, selectYarn, removeYarn, clearYarnSelection, addFeltPiece, removeFeltPiece, yarnRadiusFromLevel, eyeScale, yarnOrbitalDistance, curvatureCompensation, showOrbitProxy, showSourceObject } = useDecorStore()
+    
+    // Calculate dynamic orbital distance based on node size
+    const dynamicOrbitalDistance = React.useMemo(() => {
+        const yarnLevel = Number(settings?.yarnSizeLevel) || 4
+        const stitchType = settings?.magicRingStitchType || 'sc'
+        
+        try {
+            // Use the same calculation as NodeViewer.jsx for accurate node dimensions
+            const baseDims = computeStitchDimensions({ 
+                sizeLevel: yarnLevel, 
+                baseWidth: 1, 
+                baseHeight: 1 
+            })
+            
+            // Get stitch profile to determine node dimensions
+            const profile = STITCH_TYPES[stitchType] || STITCH_TYPES.sc
+            
+            if (!profile || typeof profile.widthMul === 'undefined') {
+                console.warn('Invalid stitch profile, using defaults')
+                return yarnOrbitalDistance
+            }
+            
+            const scaledWidth = baseDims.width * (profile.widthMul ?? 1.0)
+            const scaledHeight = baseDims.height * (profile.heightMul ?? 1.0)
+            const scaledDepth = baseDims.width * (profile.depthMul ?? 0.5)
+            
+            // Map dimensions to render scale in scene units (matches NodeViewer exactly)
+            const scaleWidth = Math.max(0.0025, scaledWidth * 0.5)
+            const scaleHeight = Math.max(0.0025, scaledHeight * 0.5)
+            const scaleDepth = Math.max(0.0025, scaledDepth * 0.5)
+            
+            // Calculate orbital distance to hover just above the nodes
+            // Need to clear the node surface but stay close
+            const maxNodeDimension = Math.max(scaleWidth/2, scaleHeight/2, scaleDepth/2)
+            
+            // Use the node dimension plus a very small clearance to hover just above the surface
+            const clearance = 0.1 // Ultra minimal clearance - extremely close to nodes
+            const calculatedOrbitalDistance = maxNodeDimension + clearance
+            
+            console.log('🟡 Dynamic orbital distance calculation:', {
+                yarnLevel,
+                stitchType,
+                baseDims,
+                profile: { widthMul: profile.widthMul, heightMul: profile.heightMul, depthMul: profile.depthMul },
+                nodeScale: { width: scaleWidth, height: scaleHeight, depth: scaleDepth },
+                maxNodeDimension,
+                clearance,
+                calculatedOrbitalDistance,
+                userOrbitalDistance: yarnOrbitalDistance
+            })
+            
+            // Return the calculated distance (no minimum constraint - allow very small distances)
+            return calculatedOrbitalDistance
+            
+        } catch (error) {
+            console.warn('Failed to calculate dynamic orbital distance:', error)
+            return yarnOrbitalDistance
+        }
+    }, [settings?.yarnSizeLevel, settings?.magicRingStitchType, yarnOrbitalDistance])
     
     // Debug showSourceObject state
     React.useEffect(() => {
@@ -153,7 +214,7 @@ const DecorScene = () => {
     }, [scaffoldCenter, allRings])
 
     // === 🟢 Updated handleGridActivate ===
-    const handleGridActivate = useCallback((id, p, n, ringTangent, quaternion) => {
+    const handleGridActivate = useCallback((id, p, n, ringTangent, quaternion, gridPointSourceObject = null) => {
         console.log('🔴 GRID CLICK DETECTED!')
         console.log('Point ID:', id)
         console.log('Position:', p)
@@ -203,7 +264,12 @@ const DecorScene = () => {
                 useDecorStore.getState()?.addUsedPoint?.(id);
             } catch (_) { }
         } else if (tool === 'yarn') {
-            const res = startOrFinishYarnAt({ pointId: id, position: p, radius: yarnRadius });
+            const res = startOrFinishYarnAt({ 
+                pointId: id, 
+                position: p, 
+                radius: yarnRadius,
+                sourceObject: gridPointSourceObject || sourceObject  // Use grid point's source object if available
+            });
             // Note: Yarn doesn't mark grid points as used - allows endpoints to become start points for branching patterns
         } else if (tool === 'felt') {
             try {
@@ -325,7 +391,7 @@ const DecorScene = () => {
                     <OrbitProxy
                         center={centerApprox}
                         baseRadius={baseR}
-                        orbitDistance={yarnOrbitalDistance}
+                        orbitDistance={dynamicOrbitalDistance}
                         curvatureCompensation={curvatureCompensation}
                         visible
                     />)
@@ -379,7 +445,7 @@ const DecorScene = () => {
                 onSelectYarn={selectYarn}
                 onDeleteYarn={removeYarn}
                 settings={settings}
-                orbitalDistance={yarnOrbitalDistance}
+                orbitalDistance={dynamicOrbitalDistance}
                 center={centerApprox}
                 sourceObject={sourceObject}
                 proxyRadius={(() => {
@@ -423,7 +489,7 @@ const DecorScene = () => {
                 <OrbitProxy
                     center={centerApprox}
                     baseRadius={baseR}
-                    orbitDistance={yarnOrbitalDistance}
+                    orbitDistance={dynamicOrbitalDistance}
                     curvatureCompensation={curvatureCompensation}
                     visible
                 />)
@@ -432,7 +498,7 @@ const DecorScene = () => {
             <FeltList
                 feltPieces={feltPieces}
                 sourceObject={sourceObject}
-                orbitalDistance={yarnOrbitalDistance * 0.3} // Felt sits closer to surface
+                orbitalDistance={dynamicOrbitalDistance * 0.3} // Felt sits closer to surface
                 selectedFeltId={null} // TODO: Add felt selection
                 onSelectFelt={null} // TODO: Add felt selection
                 onDeleteFelt={removeFeltPiece}
@@ -443,7 +509,7 @@ const DecorScene = () => {
                 <FeltPlacement
                     hoverPreview={feltSurfaceHover}
                     sourceObject={sourceObject}
-                    orbitalDistance={yarnOrbitalDistance * 0.3}
+                    orbitalDistance={dynamicOrbitalDistance * 0.3}
                 />
             )}
 

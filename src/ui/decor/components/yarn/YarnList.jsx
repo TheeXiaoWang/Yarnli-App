@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import * as THREE from 'three'
 import YarnTube from './YarnTube'
 import { calculateNodeDepth } from './yarnUtils'
+import { useDecorStore } from '../../../../app/stores/decorStore'
 
 const YarnList = ({ yarns, pendingYarnStart, hoverPreview, selectedYarnId, onSelectYarn, onDeleteYarn, settings, orbitalDistance, center, sourceObject = null }) => {
     // Calculate node depth based on current settings
@@ -121,6 +122,7 @@ const YarnList = ({ yarns, pendingYarnStart, hoverPreview, selectedYarnId, onSel
         return new THREE.TubeGeometry(previewCurve, 24, 0.04, 8, false)
     }, [previewCurve])
 
+    const { hiddenItems } = useDecorStore()
     return (
         <>
             {/* Enhanced pending yarn start marker */}
@@ -165,7 +167,7 @@ const YarnList = ({ yarns, pendingYarnStart, hoverPreview, selectedYarnId, onSel
             )}
 
             {/* Completed yarns */}
-            {yarns.map((y) => (
+            {yarns.filter(y => !hiddenItems?.has?.(`yarn:${y.id}`)).map((y) => (
                 <YarnTube 
                     key={`yarn-${y.id}`} 
                     id={y.id}
@@ -175,7 +177,7 @@ const YarnList = ({ yarns, pendingYarnStart, hoverPreview, selectedYarnId, onSel
                     nodeDepth={nodeDepth}
                     orbitalDistance={orbitalDistance}
                     center={center}
-                    sourceObject={sourceObject}
+                    sourceObject={y.sourceObject || sourceObject}
                     curvature={y.curvature || 0.0}
                     selected={selectedYarnId === y.id}
                     onSelect={onSelectYarn}

@@ -1,10 +1,12 @@
 import React from 'react'
 import FeltPiece from './FeltPiece'
+import { useDecorStore } from '../../../../app/stores/decorStore'
 
 const FeltList = ({ feltPieces, selectedFeltId, onSelectFelt, onDeleteFelt, sourceObject, orbitalDistance }) => {
+  const { hiddenItems } = useDecorStore()
   return (
     <>
-      {feltPieces.map(felt => (
+      {feltPieces.filter(felt => !hiddenItems?.has?.(`felt:${felt.id}`)).map(felt => (
         <FeltPiece
           key={`felt-${felt.id}`}
           id={felt.id}

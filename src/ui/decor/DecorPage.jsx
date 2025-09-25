@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, PerformanceMonitor, AdaptiveDpr, AdaptiveEvents, Preload } from '@react-three/drei'
 import DecorSidebar from './DecorSidebar'
+import SceneLayersPanel from './SceneLayersPanel'
+import SelectionPropertiesPanel from './SelectionPropertiesPanel'
 import DecorScene from './DecorScene'
 import FeltModal from './components/felt/FeltModal'
 import '../editor/dev-stage.css'
@@ -53,8 +55,11 @@ const DecorPage = () => {
         </Canvas>
       </div>
 
-      <div className="right-sidebar" style={{ display:'flex', flexDirection:'column', gap:8 }}>
-        <div style={{ color:'#a0a0ff', fontWeight:600 }}>Tips</div>
+      <div className="right-sidebar" style={{ display:'flex', flexDirection:'column', gap:12 }}>
+        <div style={{ color:'#a0a0ff', fontWeight:600 }}>Layers</div>
+        <SceneLayersPanel />
+        <SelectionPropertiesPanel />
+        <div style={{ color:'#a0a0ff', fontWeight:600, marginTop:12 }}>Tips</div>
         <div style={{ fontSize:13, color:'#ddd' }}>
           Select tool: Eyes places a hemisphere at a grid point. Yarn creates a noodle from first clicked grid point to second. Felt opens cutting modal.
         </div>

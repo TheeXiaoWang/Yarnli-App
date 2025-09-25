@@ -3,7 +3,7 @@ import { useDecorStore } from '../../app/stores/decorStore'
 import { useLayerlineStore } from '../../app/stores/layerlineStore'
 
 const DecorSidebar = () => {
-  const { tool, setTool, showGridPoints, toggleGridPoints, showGridVectors, toggleGridVectors, showOnlyNearGridPoints, toggleOnlyNearGridPoints, showAllGridPoints, toggleShowAllGridPoints, gridYawStartDeg, gridYawEndDeg, setGridYawStartDeg, setGridYawEndDeg, gridAngularOffsetDeg, setGridAngularOffsetDeg, alwaysShowAllNodes, toggleAlwaysShowAllNodes, eyes, yarns, feltPieces, selectedYarnId, removeYarn, clearAll, cancelYarn, eyeScale, setEyeScale, selectionRadiusPx, setSelectionRadiusPx, yarnOrbitalDistance, setYarnOrbitalDistance, curvatureCompensation, setCurvatureCompensation, showOrbitProxy, toggleOrbitProxy, showSourceObject, toggleSourceObject, updateYarnCurvature, openFeltModal, feltColor, setFeltColor, clearUsedPoints } = useDecorStore()
+  const { tool, setTool, showGridPoints, toggleGridPoints, showGridVectors, toggleGridVectors, showOnlyNearGridPoints, toggleOnlyNearGridPoints, showAllGridPoints, toggleShowAllGridPoints, gridYawStartDeg, gridYawEndDeg, setGridYawStartDeg, setGridYawEndDeg, gridAngularOffsetDeg, setGridAngularOffsetDeg, alwaysShowAllNodes, toggleAlwaysShowAllNodes, eyes, yarns, feltPieces, selectedYarnId, removeYarn, clearAll, cancelYarn, eyeScale, setEyeScale, selectionRadiusPx, setSelectionRadiusPx, yarnOrbitalDistance, setYarnOrbitalDistance, curvatureCompensation, setCurvatureCompensation, showOrbitProxy, toggleOrbitProxy, showSourceObject, toggleSourceObject, updateYarnCurvature, openFeltModal, feltColor, setFeltColor, clearUsedPoints, hiddenItems, toggleItemVisibility, setTypeVisible } = useDecorStore()
   const { settings } = useLayerlineStore()
   const yarnLevel = Number(settings?.yarnSizeLevel) || 4
 
@@ -101,40 +101,6 @@ const DecorSidebar = () => {
 
       <div className="sidebar-section">
         <h3>Yarns</h3>
-        {selectedYarnId && (() => {
-          const selectedYarn = yarns.find(y => y.id === selectedYarnId)
-          return (
-            <div style={{ padding:8, backgroundColor:'rgba(255,102,204,0.1)', borderRadius:4, marginBottom:8 }}>
-              <div style={{ fontSize:12, color:'#ff66cc', marginBottom:8 }}>Selected: Yarn #{selectedYarnId}</div>
-              
-              {/* Curvature Control */}
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-                <span style={{ fontSize:11, color:'#ccc', width:60 }}>Curvature</span>
-                <input 
-                  type="range" 
-                  min={-1.0} 
-                  max={1.0} 
-                  step={0.05}
-                  value={selectedYarn?.curvature || 0.0} 
-                  onChange={(e) => updateYarnCurvature(selectedYarnId, Number(e.target.value))} 
-                  style={{ flex: 1 }}
-                />
-                <span style={{ fontSize:10, color:'#aaa', width:40 }}>{((selectedYarn?.curvature || 0.0) * 100).toFixed(0)}%</span>
-              </div>
-              <div style={{ fontSize:10, color:'#888', marginBottom:8 }}>
-                -100% = bend left, 0% = straight, +100% = bend right
-              </div>
-              
-              <button 
-                className="tool-btn" 
-                onClick={() => removeYarn(selectedYarnId)}
-                style={{ fontSize:11, padding:'4px 8px' }}
-              >
-                Delete Selected (Shift+Click)
-              </button>
-            </div>
-          )
-        })()}
         <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
           <input type="checkbox" checked={showOrbitProxy} onChange={toggleOrbitProxy} /> Show orbit proxy
         </label>
@@ -166,8 +132,7 @@ const DecorSidebar = () => {
           <span style={{ fontSize:12, color:'#aaa' }}>{(curvatureCompensation * 100).toFixed(0)}%</span>
         </div>
         <div style={{ fontSize:11, color:'#888', marginBottom:8 }}>
-          • Click yarn to select<br/>
-          • Shift+Click to delete<br/>
+          • Select items in Layers panel or click in scene<br/>
           • Two clicks to create yarn<br/>
           • Orbit distance: yarn surface offset
         </div>

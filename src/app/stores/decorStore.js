@@ -25,7 +25,10 @@ export const useDecorStore = create((set, get) => ({
   feltColor: '#ff6b6b', // Default felt color
   pendingYarnStart: null, // [x,y,z] | null
   pendingYarnStartId: null,
+  pendingYarnStartSourceObject: null, // source object for pending yarn start
   selectedYarnId: null, // Currently selected yarn for editing/deletion
+  selectedEyeId: null, // Currently selected eye for editing/deletion
+  selectedFeltId: null, // Currently selected felt for editing/deletion
   nextId: 1,
   cursorClient: null, // { x, y } last known cursor on canvas
   eyeScale: 8, // multiplier over yarn radius for eye radius
@@ -35,6 +38,56 @@ export const useDecorStore = create((set, get) => ({
   yarnOrbitalDistance: 0.15, // distance yarn orbits from object surface
   curvatureCompensation: 0.7, // how much to reduce orbital distance at high-curvature areas (0=no reduction, 1=full reduction)
   usedPoints: new Set(), // grid point ids already decorated
+
+  // Layers visibility and naming
+  hiddenItems: new Set(), // keys like 'eye:1', 'yarn:3', 'felt:2'
+  itemNames: new Map(), // custom names: 'eye:1' -> 'Left Eye', 'yarn:3' -> 'Smile'
+
+  isItemHidden: (type, id) => {
+    const key = `${type}:${id}`
+    return get().hiddenItems.has(key)
+  },
+  setItemVisible: (type, id, visible) => set((s) => {
+    const key = `${type}:${id}`
+    const hidden = new Set(s.hiddenItems)
+    if (visible) hidden.delete(key); else hidden.add(key)
+    return { hiddenItems: hidden }
+  }),
+  toggleItemVisibility: (type, id) => set((s) => {
+    const key = `${type}:${id}`
+    const hidden = new Set(s.hiddenItems)
+    if (hidden.has(key)) hidden.delete(key); else hidden.add(key)
+    return { hiddenItems: hidden }
+  }),
+  setTypeVisible: (type, visible) => set((s) => {
+    const hidden = new Set(s.hiddenItems)
+    const items = type === 'eye' ? s.eyes : type === 'yarn' ? s.yarns : s.feltPieces
+    for (const it of items) {
+      const key = `${type}:${it.id}`
+      if (visible) hidden.delete(key); else hidden.add(key)
+    }
+    return { hiddenItems: hidden }
+  }),
+  getItemName: (type, id) => {
+    const key = `${type}:${id}`
+    const customName = get().itemNames.get(key)
+    if (customName) return customName
+    // Default names
+    if (type === 'eye') return `Eye ${id}`
+    if (type === 'yarn') return `Yarn ${id}`
+    if (type === 'felt') return `Felt ${id}`
+    return `${type} ${id}`
+  },
+  setItemName: (type, id, name) => set((s) => {
+    const key = `${type}:${id}`
+    const newNames = new Map(s.itemNames)
+    if (name && name.trim()) {
+      newNames.set(key, name.trim())
+    } else {
+      newNames.delete(key) // Remove custom name, fall back to default
+    }
+    return { itemNames: newNames }
+  }),
 
   setTool: (tool) => set({ tool }),
   toggleGridPoints: () => set((s) => ({ showGridPoints: !s.showGridPoints })),
@@ -82,24 +135,41 @@ export const useDecorStore = create((set, get) => ({
 
   removeEye: (id) => set((s) => ({ eyes: s.eyes.filter(e => e.id !== id) })),
 
-  startOrFinishYarnAt: ({ pointId = null, position, radius }) => {
+  startOrFinishYarnAt: ({ pointId = null, position, radius, sourceObject = null }) => {
     const start = get().pendingYarnStart
     const startId = get().pendingYarnStartId
+    const startSourceObject = get().pendingYarnStartSourceObject
     if (!start) {
-      set({ pendingYarnStart: [...position], pendingYarnStartId: pointId })
+      set({ 
+        pendingYarnStart: [...position], 
+        pendingYarnStartId: pointId,
+        pendingYarnStartSourceObject: sourceObject
+      })
       return { status: 'started' }
     }
     const id = get().nextId
+    // Use the source object from the start point if available, otherwise use the end point's
+    const yarnSourceObject = startSourceObject || sourceObject
     set((s) => ({
-      yarns: [...s.yarns, { id, start: [...start], end: [...position], radius: Number(radius) || 0.06, startPointId: startId, endPointId: pointId, curvature: 0.0 }],
+      yarns: [...s.yarns, { 
+        id, 
+        start: [...start], 
+        end: [...position], 
+        radius: Number(radius) || 0.06, 
+        startPointId: startId, 
+        endPointId: pointId, 
+        curvature: 0.0,
+        sourceObject: yarnSourceObject
+      }],
       nextId: s.nextId + 1,
       pendingYarnStart: null,
-      pendingYarnStartId: null
+      pendingYarnStartId: null,
+      pendingYarnStartSourceObject: null
     }))
     return { status: 'completed', startPointId: startId, endPointId: pointId }
   },
 
-  cancelYarn: () => set({ pendingYarnStart: null }),
+  cancelYarn: () => set({ pendingYarnStart: null, pendingYarnStartId: null, pendingYarnStartSourceObject: null }),
 
   removeYarn: (id) => set((s) => ({ 
     yarns: s.yarns.filter(y => y.id !== id),
@@ -107,8 +177,17 @@ export const useDecorStore = create((set, get) => ({
   })),
 
   selectYarn: (id) => set({ selectedYarnId: id }),
-  
   clearYarnSelection: () => set({ selectedYarnId: null }),
+  selectEye: (id) => set({ selectedEyeId: id }),
+  clearEyeSelection: () => set({ selectedEyeId: null }),
+  selectFelt: (id) => set({ selectedFeltId: id }),
+  clearFeltSelection: () => set({ selectedFeltId: null }),
+  selectItem: (type, id) => {
+    if (type === 'eye') set({ selectedEyeId: id, selectedYarnId: null, selectedFeltId: null })
+    else if (type === 'yarn') set({ selectedYarnId: id, selectedEyeId: null, selectedFeltId: null })
+    else if (type === 'felt') set({ selectedFeltId: id, selectedEyeId: null, selectedYarnId: null })
+  },
+  clearAllSelections: () => set({ selectedYarnId: null, selectedEyeId: null, selectedFeltId: null }),
 
   updateYarnCurvature: (id, curvature) => set((state) => ({
     yarns: state.yarns.map(y => y.id === id ? { ...y, curvature } : y)

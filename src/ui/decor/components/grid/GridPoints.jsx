@@ -62,11 +62,22 @@ const GridPoints = ({
     const { camera, gl, size } = useThree()
     const [mousePos, setMousePos] = React.useState({ x: 0, y: 0 })
     const [cameraPos, setCameraPos] = React.useState(camera.position.clone())
-    const [lastMouseUpdate, setLastMouseUpdate] = React.useState(0)
     const [isRotating, setIsRotating] = React.useState(false)
     const velocityHistory = React.useRef([])
     const lastMovementTime = React.useRef(0)
     const isStoppingRef = React.useRef(false)
+    const [projectedNdc, setProjectedNdc] = React.useState(null) // Float32Array [x,y,z] per point
+    const tilesRef = React.useRef(null) // { bins, cols, rows, tileSize, pxpy, facing }
+    const mouseRef = React.useRef({ x: 0, y: 0 })
+    const framePendingRef = React.useRef(false)
+    const [visiblePoints, setVisiblePoints] = React.useState([])
+    const lastMousePxRef = React.useRef({ x: Infinity, y: Infinity })
+    const lastHoverIdRef = React.useRef(null)
+    const lastHoverDistRef = React.useRef(Infinity)
+    const lastHoverChangeAtRef = React.useRef(0)
+    const spherePropsRef = React.useRef({ center: new THREE.Vector3(), radius: 1 })
+    const computeTokenRef = React.useRef(0)
+    const hoverAnchorPxRef = React.useRef({ x: 0, y: 0 })
     
     // Calculate dynamic sphere center based on selected object's position and scale
     const sphereCenter = React.useMemo(() => {
@@ -195,7 +206,9 @@ const GridPoints = ({
                                 ringTangent: [ringTangent.x, ringTangent.y, ringTangent.z],
                                 quaternion: [q.x, q.y, q.z, q.w],
                                 segmentIndex: gridIndex,
-                                t: 0.5  // Midpoint interpolation
+                                t: 0.5,  // Midpoint interpolation
+                                sourceObject: selectedObject,  // Pass source object info for yarn calculations
+                                opacity: 0.0  // Default opacity (will be updated by gradient logic)
                             }
                             out.push({ id: id++, ...gridPoint })
                         }
@@ -203,6 +216,7 @@ const GridPoints = ({
                 }
             }
         }
+        
         return out
     }, [allRings, centerApprox, eyeRadius, axisDir])
 
@@ -211,24 +225,32 @@ const GridPoints = ({
         if (!gl?.domElement) return
         
         const handleMouseMove = (e) => {
-            // Skip mouse updates during camera rotation
             if (isRotating) return
-            
-            const now = performance.now()
-            // Throttle to 20fps (50ms between updates)
-            if (now - lastMouseUpdate < 50) return
-            
             const rect = gl.domElement.getBoundingClientRect()
             const x = ((e.clientX - rect.left) / rect.width) * 2 - 1
             const y = -((e.clientY - rect.top) / rect.height) * 2 + 1
-            setMousePos({ x, y })
-            setLastMouseUpdate(now)
+            mouseRef.current = { x, y }
+            setMousePos(mouseRef.current) // keep state for deps when needed
+            // Skip recompute if mouse moved less than 1.5px since last run
+            const mx = (x * 0.5 + 0.5) * Math.max(1, size.width)
+            const my = (1 - (y * 0.5 + 0.5)) * Math.max(1, size.height)
+            const dx = mx - lastMousePxRef.current.x
+            const dy = my - lastMousePxRef.current.y
+            const dist2 = dx*dx + dy*dy
+            if (dist2 < 2.25) return
+            lastMousePxRef.current = { x: mx, y: my }
+            if (!framePendingRef.current) {
+                framePendingRef.current = true
+                requestAnimationFrame(() => {
+                    framePendingRef.current = false
+                    const token = ++computeTokenRef.current
+                    runHoverCompute(token)
+                })
+            }
         }
-        
-        // Use passive event for better performance
         gl.domElement.addEventListener('mousemove', handleMouseMove, { passive: true })
         return () => gl.domElement.removeEventListener('mousemove', handleMouseMove)
-    }, [gl, lastMouseUpdate, isRotating])
+    }, [gl, isRotating])
     
     // Update camera position tracking and detect rotation
     React.useEffect(() => {
@@ -300,91 +322,325 @@ const GridPoints = ({
         }
     }, [camera, isRotating])
 
-    // Filter grid points based on camera view and mouse proximity
-    const visibleGridPoints = React.useMemo(() => {
-        //console.log('Grid useMemo running - isRotating:', isRotating, 'isStopping:', isStoppingRef.current)
-        
+    // Compute and cache NDC projection for all grid points when camera becomes still
+    const computeProjectionCache = React.useCallback(() => {
+        if (!camera || !Array.isArray(gridPoints) || gridPoints.length === 0) {
+            setProjectedNdc(null)
+            tilesRef.current = null
+            return
+        }
+        const out = new Float32Array(gridPoints.length * 3)
+        const tmp = new THREE.Vector3()
+        const pxpy = new Float32Array(gridPoints.length * 2)
+        const facing = new Float32Array(gridPoints.length)
+        const camDir = camera.getWorldDirection(new THREE.Vector3())
+        for (let i = 0; i < gridPoints.length; i++) {
+            const p = gridPoints[i].position
+            if (Array.isArray(p) && p.length === 3) {
+                tmp.set(p[0], p[1], p[2]).project(camera)
+                out[i * 3 + 0] = tmp.x
+                out[i * 3 + 1] = tmp.y
+                out[i * 3 + 2] = tmp.z
+                // Convert to screen pixels for tiling
+                const sx = (tmp.x * 0.5 + 0.5) * Math.max(1, size.width)
+                const sy = (1 - (tmp.y * 0.5 + 0.5)) * Math.max(1, size.height)
+                pxpy[i * 2 + 0] = sx
+                pxpy[i * 2 + 1] = sy
+                // Facing metric: -normal · camDir
+                const nrm = new THREE.Vector3(p[0], p[1], p[2]).sub(sphereCenter).normalize()
+                facing[i] = Math.max(-1, Math.min(1, -nrm.dot(camDir)))
+            } else {
+                out[i * 3 + 0] = 999
+                out[i * 3 + 1] = 999
+                out[i * 3 + 2] = 999
+                pxpy[i * 2 + 0] = 1e9
+                pxpy[i * 2 + 1] = 1e9
+                facing[i] = -1
+            }
+        }
+        setProjectedNdc(out)
+        // Build screen-space tiles: choose size proportional to selection radius
+        const baseTile = Math.max(24, Math.floor((selectionRadiusPx || 50) * 0.8))
+        const tileSize = baseTile
+        const cols = Math.max(1, Math.ceil(Math.max(1, size.width) / tileSize))
+        const rows = Math.max(1, Math.ceil(Math.max(1, size.height) / tileSize))
+        const bins = new Array(cols * rows)
+        for (let b = 0; b < bins.length; b++) bins[b] = []
+        for (let i = 0; i < gridPoints.length; i++) {
+            const z = out[i * 3 + 2]
+            if (z < -1 || z > 1) continue
+            const sx = pxpy[i * 2 + 0]
+            const sy = pxpy[i * 2 + 1]
+            if (!Number.isFinite(sx) || !Number.isFinite(sy)) continue
+            let c = Math.floor(sx / tileSize)
+            let r = Math.floor(sy / tileSize)
+            if (c < 0 || r < 0 || c >= cols || r >= rows) continue
+            bins[r * cols + c].push(i)
+        }
+        tilesRef.current = { bins, cols, rows, tileSize, pxpy, facing }
+
+        // Compute average radius for fast sphere intersection during hover
+        let rSum = 0, rCount = 0
+        const c = new THREE.Vector3(...centerApprox)
+        for (let i = 0; i < Math.min(gridPoints.length, 200); i++) { // sample up to 200
+            const p = gridPoints[i].position
+            if (Array.isArray(p) && p.length === 3) {
+                rSum += c.distanceTo(new THREE.Vector3(p[0], p[1], p[2]))
+                rCount++
+            }
+        }
+        const avgR = rCount > 0 ? rSum / rCount : 1
+        spherePropsRef.current = { center: c, radius: avgR }
+    }, [camera, gridPoints, size.width, size.height])
+
+    // Recompute when camera stops rotating or grid points change
+    React.useEffect(() => {
+        if (!isRotating) computeProjectionCache()
+    }, [isRotating, computeProjectionCache])
+
+    React.useEffect(() => {
+        // Also recompute when grid points change while still
+        if (!isRotating) computeProjectionCache()
+    }, [gridPoints, isRotating, computeProjectionCache])
+
+    const runHoverCompute = React.useCallback((token) => {
         // Don't show any grid points when felt tool is active
         if (tool === 'felt') {
-            return []
+            setVisiblePoints([])
+            setHoverPreview?.(null)
+            setHoveredId?.(null)
+            return
         }
         
         // During rotation OR while stopping, return empty array and don't run expensive calculations
         if (isRotating || isStoppingRef.current) {
-            //console.log('Returning empty array due to rotation or stopping')
-            return []
+            setVisiblePoints([])
+            setHoverPreview?.(null)
+            setHoveredId?.(null)
+            return
         }
         
-        //console.log('Running expensive grid calculations')
-        if (!camera) return gridPoints
+        if (!camera) { 
+            setVisiblePoints(gridPoints)
+            setHoverPreview?.(null)
+            setHoveredId?.(null)
+            return 
+        }
 
         // If "Show all grid points" is enabled, bypass all filtering
         if (showAllGridPoints) {
-            console.log('🌟 Showing ALL grid points - bypassing all filters!')
-            return gridPoints
+            setVisiblePoints(gridPoints)
+            return
         }
 
-        // Create raycaster from mouse position
+        // If we have a projection cache, use fast 2D NDC distance
+        if (projectedNdc && projectedNdc.length === gridPoints.length * 3) {
+            const maxK = 5
+            const radiusPx = (selectionRadiusPx || 50)
+            // Use screen-space tiles when available
+            const tiles = tilesRef.current
+
+            // Fixed-size top-K array
+            const topIdx = new Int32Array(maxK).fill(-1)
+            const topScore = new Float32Array(maxK).fill(1e9)
+
+            // Precompute camera forward once and reuse temp vectors
+            const camDir = camera.getWorldDirection(new THREE.Vector3())
+            const tmp = new THREE.Vector3()
+            const nrm = new THREE.Vector3()
+
+            const considerIndex = (i) => {
+                const x = projectedNdc[i * 3 + 0]
+                const y = projectedNdc[i * 3 + 1]
+                const z = projectedNdc[i * 3 + 2]
+                if (!Number.isFinite(x) || !Number.isFinite(y) || z < -1 || z > 1) return
+
+                // Face the camera
+                if (tiles && tiles.facing && tiles.facing[i] <= 0.1) return
+
+                // Convert mouse NDC to pixels
+                const sx = (x * 0.5 + 0.5) * Math.max(1, size.width)
+                const sy = (1 - (y * 0.5 + 0.5)) * Math.max(1, size.height)
+                const mx = (mousePos.x * 0.5 + 0.5) * Math.max(1, size.width)
+                const my = (1 - (mousePos.y * 0.5 + 0.5)) * Math.max(1, size.height)
+                const dx = sx - mx
+                const dy = sy - my
+                const d2 = dx * dx + dy * dy
+                if (d2 > radiusPx * radiusPx) return
+
+                if (d2 >= topScore[maxK - 1]) return
+                let j = maxK - 1
+                while (j > 0 && d2 < topScore[j - 1]) {
+                    topScore[j] = topScore[j - 1]
+                    topIdx[j] = topIdx[j - 1]
+                    j--
+                }
+                topScore[j] = d2
+                topIdx[j] = i
+            }
+
+            if (tiles) {
+                const mx = (mousePos.x * 0.5 + 0.5) * Math.max(1, size.width)
+                const my = (1 - (mousePos.y * 0.5 + 0.5)) * Math.max(1, size.height)
+                const { bins, cols, rows, tileSize, pxpy } = tiles
+                const tc = Math.floor(mx / tileSize)
+                const tr = Math.floor(my / tileSize)
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        const r = tr + dr
+                        const c = tc + dc
+                        if (r < 0 || c < 0 || r >= rows || c >= cols) continue
+                        const list = bins[r * cols + c]
+                        for (let k = 0; k < list.length; k++) considerIndex(list[k])
+                    }
+                }
+            } else {
+                for (let i = 0; i < gridPoints.length; i++) considerIndex(i)
+            }
+
+            // Build candidate list with pixel distance and world ray distance for clickability
+            // Build a stable 3D ray that sticks to the sphere surface to avoid jitter at grazing angles
+            const raycaster = new THREE.Raycaster()
+            raycaster.setFromCamera(mousePos, camera)
+            const sphere = new THREE.Sphere(spherePropsRef.current.center, spherePropsRef.current.radius * 1.05)
+            const hit = new THREE.Vector3()
+            const hasHit = raycaster.ray.intersectSphere(sphere, hit)
+            if (hasHit) {
+                // Re-aim the ray to start from camera toward the sphere hit point (stabilizes closest-point math)
+                const dir = hit.clone().sub(raycaster.ray.origin).normalize()
+                raycaster.ray.direction.copy(dir)
+            }
+            const mx = (mousePos.x * 0.5 + 0.5) * Math.max(1, size.width)
+            const my = (1 - (mousePos.y * 0.5 + 0.5)) * Math.max(1, size.height)
+            const worldRadius = (selectionRadiusPx || 50) / 50.0
+            const candidates = []
+            for (let k = 0; k < maxK; k++) {
+                const idx = topIdx[k]
+                if (idx < 0) continue
+                const x = projectedNdc[idx * 3 + 0]
+                const y = projectedNdc[idx * 3 + 1]
+                const sx = (x * 0.5 + 0.5) * Math.max(1, size.width)
+                const sy = (1 - (y * 0.5 + 0.5)) * Math.max(1, size.height)
+                const dx = sx - mx
+                const dy = sy - my
+                const d2px = dx * dx + dy * dy
+                const pWorld = new THREE.Vector3(...gridPoints[idx].position)
+                const rayToPoint = pWorld.clone().sub(raycaster.ray.origin)
+                const projectedLength = rayToPoint.dot(raycaster.ray.direction)
+                let dWorld = Infinity
+                if (projectedLength >= 0) {
+                    const closest = raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(projectedLength))
+                    dWorld = pWorld.distanceTo(closest)
+                }
+                candidates.push({ idx, d2px, dWorld })
+            }
+            // Filter by clickability (world distance) to avoid preview in non-clickable zones
+            const clickable = candidates.filter(c => c.dWorld <= worldRadius)
+            clickable.sort((a,b)=>a.d2px-b.d2px)
+            
+            // If no clickable candidates, clear everything
+            if (clickable.length === 0) {
+                if (token != null && token !== computeTokenRef.current) return
+                setVisiblePoints([])
+                setHoveredId?.(null)
+                setHoverPreview?.(null)
+                lastHoverIdRef.current = null
+                return
+            }
+            // Temporal hysteresis: prefer last hover if close in px and not much worse in world distance
+            const stickPx2 = 100 // ~10px tolerance
+            const stickWorld = 0.25 * ((selectionRadiusPx || 50) / 50.0)
+            let chosen = clickable[0]
+            const lastIdx = clickable.find(c => gridPoints[c.idx].id === lastHoverIdRef.current)
+            if (lastIdx && chosen) {
+                const pxOk = lastIdx.d2px <= chosen.d2px + stickPx2
+                const worldOk = (lastIdx.dWorld - chosen.dWorld) <= stickWorld
+                // Break hysteresis if mouse moved far from the anchor point of last commit
+                const mx2 = (mousePos.x * 0.5 + 0.5) * Math.max(1, size.width)
+                const my2 = (1 - (mousePos.y * 0.5 + 0.5)) * Math.max(1, size.height)
+                const ddx = mx2 - hoverAnchorPxRef.current.x
+                const ddy = my2 - hoverAnchorPxRef.current.y
+                const movedFar = (ddx*ddx + ddy*ddy) > 400 // >20px
+                if (!movedFar && pxOk && worldOk) chosen = lastIdx
+            }
+            // Visible points are the clickable ones (up to 5)
+            const result = clickable.slice(0, maxK).map(c => gridPoints[c.idx])
+            if (token != null && token !== computeTokenRef.current) return
+            if (result.length !== visiblePoints.length || result.some((p, i) => p.id !== visiblePoints[i]?.id)) {
+                setVisiblePoints(result)
+            }
+            // Programmatic hover only if a clickable candidate exists
+            const chosenPoint = chosen ? gridPoints[chosen.idx] : null
+            lastHoverIdRef.current = chosenPoint?.id ?? null
+            if (chosenPoint) {
+                hoverAnchorPxRef.current = {
+                    x: (mousePos.x * 0.5 + 0.5) * Math.max(1, size.width),
+                    y: (1 - (mousePos.y * 0.5 + 0.5)) * Math.max(1, size.height)
+                }
+            }
+            try {
+                setHoveredId?.(lastHoverIdRef.current)
+                if (tool === 'eyes' && chosenPoint) {
+                    setHoverPreview?.({
+                        position: chosenPoint.position,
+                        normal: chosenPoint.normal,
+                        ringTangent: chosenPoint.ringTangent,
+                        quaternion: chosenPoint.quaternion
+                    })
+                } else {
+                    setHoverPreview?.(null)
+                }
+            } catch (_) {}
+            return
+        }
+
+        // Fallback to 3D method if cache missing
         const raycaster = new THREE.Raycaster()
         raycaster.setFromCamera(mousePos, camera)
-
-        // Filter and sort grid points, then limit to 5 closest
         const candidatePoints = []
-
+        const camDir = camera.getWorldDirection(new THREE.Vector3())
+        const nrm = new THREE.Vector3()
         for (const gp of gridPoints) {
             const pointPos = new THREE.Vector3(...gp.position)
-
-            // Skip if behind camera
             const cameraToPoint = pointPos.clone().sub(cameraPos)
-            if (cameraToPoint.dot(camera.getWorldDirection(new THREE.Vector3())) < 0) {
-                continue // Behind camera
-            }
-
-            // GRID VECTOR VS CAMERA DIRECTION: Only show grid points where grid vectors point opposite to camera
-            // Get camera viewing direction (where camera is looking)
-            const cameraDirection = camera.getWorldDirection(new THREE.Vector3())
-
-            // Calculate grid vector direction (same as current grid vector rendering)
-            const gridVectorDirection = sphereCenter.clone().sub(pointPos).normalize().negate()
-
-            // Test: if grid vector points generally opposite to camera direction, show it
-            // Grid vector points outward from surface, camera direction points into scene
-            // We want: gridVector dot (-cameraDirection) > threshold
-            // This means the grid vector and the opposite of camera direction are aligned
-            const dotProduct = gridVectorDirection.dot(cameraDirection.clone().negate())
-            if (dotProduct <= 0.1) {
-                continue // Grid vector doesn't point opposite to camera
-            }
-
-            // MOUSE PROXIMITY: Only show grid points near mouse cursor
+            if (cameraToPoint.dot(camera.getWorldDirection(new THREE.Vector3())) < 0) continue
+            // Face the camera gate
+            nrm.copy(pointPos).sub(sphereCenter).normalize()
+            const facing = -nrm.dot(camDir)
+            if (facing <= 0.1) continue
             const rayToPoint = pointPos.clone().sub(raycaster.ray.origin)
-            const rayDirection = raycaster.ray.direction
-            const projectedLength = rayToPoint.dot(rayDirection)
-
-            if (projectedLength < 0) continue // Behind camera
-
-            const closestPointOnRay = raycaster.ray.origin.clone().add(rayDirection.clone().multiplyScalar(projectedLength))
+            const projectedLength = rayToPoint.dot(raycaster.ray.direction)
+            if (projectedLength < 0) continue
+            const closestPointOnRay = raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(projectedLength))
             const distanceToRay = pointPos.distanceTo(closestPointOnRay)
-
-            // Only show grid points within mouse radius (always enabled now)
-            const mouseRadius = (selectionRadiusPx || 50) / 50.0 // Convert pixels to world units
-            if (distanceToRay > mouseRadius) {
-                continue // Too far from mouse cursor
-            }
-
-            // Add to candidates with distance for sorting
-            candidatePoints.push({
-                gridPoint: gp,
-                distanceToMouse: distanceToRay
-            })
+            const mouseRadius = (selectionRadiusPx || 50) / 50.0
+            if (distanceToRay > mouseRadius) continue
+            candidatePoints.push({ gridPoint: gp, distanceToMouse: distanceToRay })
         }
+        const arr = candidatePoints.sort((a,b)=>a.distanceToMouse-b.distanceToMouse).slice(0,5).map(c=>c.gridPoint)
+        if (token != null && token !== computeTokenRef.current) return
+        setVisiblePoints(arr)
+        try {
+            const hoverId = arr[0]?.id ?? null
+            setHoveredId?.(hoverId)
+            if (tool === 'eyes' && arr[0]) {
+                setHoverPreview?.({
+                    position: arr[0].position,
+                    normal: arr[0].normal,
+                    ringTangent: arr[0].ringTangent,
+                    quaternion: arr[0].quaternion
+                })
+            } else {
+                setHoverPreview?.(null)
+            }
+            lastHoverIdRef.current = hoverId
+        } catch (_) {}
+    }, [gridPoints, cameraPos, camera, centerApprox, mousePos, selectionRadiusPx, sphereCenter, isRotating, showAllGridPoints, tool, projectedNdc, size.width, size.height])
 
-        // Sort by distance to mouse and take only the closest 5
-        return candidatePoints
-            .sort((a, b) => a.distanceToMouse - b.distanceToMouse)
-            .slice(0, 5) // Limit to maximum 5 grid points
-            .map(candidate => candidate.gridPoint)
-    }, [gridPoints, cameraPos, camera, centerApprox, mousePos, selectionRadiusPx, sphereCenter, isRotating, showAllGridPoints, tool])
+    // Re-run compute when caches or settings change and we're still
+    React.useEffect(() => {
+        if (!isRotating) runHoverCompute()
+    }, [projectedNdc, selectionRadiusPx, showAllGridPoints, isRotating, runHoverCompute])
 
     // Grid points are now filtered out at DecorScene level when felt tool is active
     
@@ -392,7 +648,7 @@ const GridPoints = ({
 
     return (
         <>
-            {visibleGridPoints.map((gp) => (
+            {visiblePoints.map((gp) => (
                 <group key={`gp-${gp.id}`}>
                     <ClickablePoint
                         id={gp.id}
@@ -406,8 +662,8 @@ const GridPoints = ({
                         onUnhover={() => setHoveredId(null)}
                         onActivate={(id, pos, norm) => {
                             console.log('🟢 GridPoints onActivate called!')
-                            console.log('Calling handleGridActivate with:', id, pos, norm, gp.ringTangent, gp.quaternion)
-                            handleGridActivate(id, pos, norm, gp.ringTangent, gp.quaternion)
+                            console.log('Calling handleGridActivate with:', id, pos, norm, gp.ringTangent, gp.quaternion, gp.sourceObject)
+                            handleGridActivate(id, pos, norm, gp.ringTangent, gp.quaternion, gp.sourceObject)
                         }}
                         onHoverEye={(pos, norm, ringTangent, quaternion) => {
                             // Only show eye preview when Eyes tool is selected
