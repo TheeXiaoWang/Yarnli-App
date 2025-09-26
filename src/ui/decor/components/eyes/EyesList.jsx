@@ -3,16 +3,21 @@ import EyeFromQuaternion from './EyeFromQuaternion'
 import { useDecorStore } from '../../../../app/stores/decorStore'
 
 const EyesList = ({ eyes, hoverPreview, settings, yarnRadiusFromLevel, eyeScale, center }) => {
-  const { hiddenItems } = useDecorStore()
+  const { hiddenItems, selectedEyeId, selectEye, removeEye, clearAllSelections } = useDecorStore()
   return (
     <>
       {eyes.filter(e => !hiddenItems?.has?.(`eye:${e.id}`)).map(e => (
         <EyeFromQuaternion
           key={`eye-${e.id}`}
+          id={e.id}
           position={e.position}
           quaternion={e.quaternion}
           radius={e.radius}
           center={center}
+          selected={selectedEyeId === e.id}
+          onSelect={selectEye}
+          onDelete={removeEye}
+          onClearOthers={clearAllSelections}
         />
       ))}
 

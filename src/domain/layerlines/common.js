@@ -29,6 +29,14 @@ export function createGeometryForType(type) {
     case 'triangle':
       // Triangular prism of height 2 along Y with radius 1
       return new THREE.CylinderGeometry(1, 1, 2, 3)
+    case 'cylinder':
+      return new THREE.CylinderGeometry(1, 1, 2, 48)
+    case 'capsule':
+      return new THREE.CapsuleGeometry(0.5, 1, 4, 8)
+    case 'pyramid':
+      return new THREE.ConeGeometry(1, 2, 4)
+    case 'torus':
+      return new THREE.TorusGeometry(1, 0.4, 16, 100)
     default:
       return null
   }

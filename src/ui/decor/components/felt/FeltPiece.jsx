@@ -62,6 +62,9 @@ const FeltPiece = ({ id, shape, color, position, normal, scale = 1.0, sourceObje
     if (e.shiftKey && onDelete) {
       onDelete(id)
     } else if (onSelect) {
+      // Clear all other selections first, then select this felt
+      const { clearAllSelections } = require('../../../../app/stores/decorStore').useDecorStore.getState()
+      clearAllSelections()
       onSelect(id)
     }
   }
@@ -69,32 +72,53 @@ const FeltPiece = ({ id, shape, color, position, normal, scale = 1.0, sourceObje
   if (!geometry) return null
 
   return (
-    <mesh
-      position={finalPosition}
-      rotation={finalRotation}
-      geometry={geometry}
-      onClick={handleClick}
-      onPointerOver={(e) => {
-        e.stopPropagation()
-        document.body.style.cursor = 'pointer'
-      }}
-      onPointerOut={(e) => {
-        e.stopPropagation()
-        document.body.style.cursor = 'default'
-      }}
-      renderOrder={1002} // Render above other elements
-    >
-      <meshStandardMaterial
-        color={color}
-        side={THREE.DoubleSide}
-        transparent={true}
-        opacity={0.9}
-        emissive={selected ? 0x222222 : 0x000000}
-        emissiveIntensity={selected ? 0.3 : 0}
-        roughness={0.8}
-        metalness={0.1}
-      />
-    </mesh>
+    <group>
+      <mesh
+        position={finalPosition}
+        rotation={finalRotation}
+        geometry={geometry}
+        onClick={handleClick}
+        onPointerOver={(e) => {
+          e.stopPropagation()
+          document.body.style.cursor = 'pointer'
+        }}
+        onPointerOut={(e) => {
+          e.stopPropagation()
+          document.body.style.cursor = 'default'
+        }}
+        renderOrder={1002} // Render above other elements
+      >
+        <meshStandardMaterial
+          color={color}
+          side={THREE.DoubleSide}
+          transparent={true}
+          opacity={0.9}
+          emissive={selected ? 0x001122 : 0x000000}  // Subtle blue emissive when selected
+          emissiveIntensity={selected ? 0.15 : 0}
+          roughness={0.8}
+          metalness={0.1}
+        />
+      </mesh>
+      
+      {/* Selection highlight - Outline Glow */}
+      {selected && (
+        <mesh
+          position={finalPosition}
+          rotation={finalRotation}
+          geometry={geometry}
+          scale={[1.1, 1.1, 1.1]}
+          renderOrder={6000}
+        >
+          <meshBasicMaterial
+            color={0x66ffcc}  // Bright green outline for felt
+            side={THREE.BackSide}
+            transparent
+            opacity={0.6}
+            depthTest={false}
+          />
+        </mesh>
+      )}
+    </group>
   )
 }
 

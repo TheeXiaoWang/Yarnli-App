@@ -205,7 +205,7 @@ All colors MUST be HSL.
   --accent-2: #67d3c6; /* artsy teal */
   --danger: #ff6b6b;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --radius: 10px;
+  --radius: 0px;
 }
 
 body {

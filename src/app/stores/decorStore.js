@@ -6,6 +6,25 @@ function yarnRadiusFromLevel(level) {
   return 0.03 + (n - 1) * 0.0075
 }
 
+// Generate yarn color based on ID for variety
+function generateYarnColor(id) {
+  const yarnColors = [
+    0xff6b9d, // Pink
+    0x9d6bff, // Purple  
+    0x6b9dff, // Blue
+    0x6bff9d, // Green
+    0xff9d6b, // Orange
+    0xffff6b, // Yellow
+    0xff6b6b, // Red
+    0x6bffff, // Cyan
+    0xc06bff, // Violet
+    0xff6bc0, // Magenta
+  ]
+  
+  const colorIndex = id ? (id % yarnColors.length) : Math.floor(Math.random() * yarnColors.length)
+  return yarnColors[colorIndex]
+}
+
 export const useDecorStore = create((set, get) => ({
   tool: 'eyes', // 'eyes' | 'yarn' | 'felt'
   showGridPoints: true,
@@ -19,7 +38,7 @@ export const useDecorStore = create((set, get) => ({
   // Grid point angular offset (degrees) to rotate grid points around their layer
   gridAngularOffsetDeg: 0,
   eyes: [], // { id, position:[x,y,z], normal:[x,y,z], radius }
-  yarns: [], // { id, start:[x,y,z], end:[x,y,z], radius }
+  yarns: [], // { id, start:[x,y,z], end:[x,y,z], radius, color }
   feltPieces: [], // { id, shape: [{x,y}], color, position:[x,y,z], normal:[x,y,z], scale }
   showFeltModal: false,
   feltColor: '#ff6b6b', // Default felt color
@@ -159,7 +178,8 @@ export const useDecorStore = create((set, get) => ({
         startPointId: startId, 
         endPointId: pointId, 
         curvature: 0.0,
-        sourceObject: yarnSourceObject
+        sourceObject: yarnSourceObject,
+        color: generateYarnColor(id)
       }],
       nextId: s.nextId + 1,
       pendingYarnStart: null,
@@ -191,6 +211,14 @@ export const useDecorStore = create((set, get) => ({
 
   updateYarnCurvature: (id, curvature) => set((state) => ({
     yarns: state.yarns.map(y => y.id === id ? { ...y, curvature } : y)
+  })),
+
+  updateYarnColor: (id, color) => set((state) => ({
+    yarns: state.yarns.map(y => y.id === id ? { ...y, color } : y)
+  })),
+
+  updateEyeRadius: (id, radius) => set((state) => ({
+    eyes: state.eyes.map(e => e.id === id ? { ...e, radius: Math.max(0.4, Math.min(0.8, Number(radius) || 0.4)) } : e)
   })),
 
   // Felt paper actions

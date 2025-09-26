@@ -185,6 +185,54 @@ const SceneObject = ({ object, isSelected }) => {
           </mesh>
         )
       
+      case 'cylinder':
+        return (
+          <mesh {...commonProps}>
+            <cylinderGeometry args={[1, 1, 2, 32]} />
+            <meshStandardMaterial 
+              color={object.color} 
+              transparent={true}
+              opacity={isSelected ? 0.8 : 1}
+            />
+          </mesh>
+        )
+      
+      case 'capsule':
+        return (
+          <mesh {...commonProps}>
+            <capsuleGeometry args={[0.5, 1, 4, 8]} />
+            <meshStandardMaterial 
+              color={object.color} 
+              transparent={true}
+              opacity={isSelected ? 0.8 : 1}
+            />
+          </mesh>
+        )
+      
+      case 'pyramid':
+        return (
+          <mesh {...commonProps}>
+            <coneGeometry args={[1, 2, 4]} />
+            <meshStandardMaterial 
+              color={object.color} 
+              transparent={true}
+              opacity={isSelected ? 0.8 : 1}
+            />
+          </mesh>
+        )
+      
+      case 'torus':
+        return (
+          <mesh {...commonProps}>
+            <torusGeometry args={[1, 0.4, 16, 100]} />
+            <meshStandardMaterial 
+              color={object.color} 
+              transparent={true}
+              opacity={isSelected ? 0.8 : 1}
+            />
+          </mesh>
+        )
+      
       default:
         return null
     }
@@ -249,6 +297,90 @@ const SceneObject = ({ object, isSelected }) => {
           ]}
         >
           <sphereGeometry args={[1, 32, 32]} />
+          <meshBasicMaterial 
+            color="#00ff00" 
+            transparent={true}
+            opacity={0.2}
+            side={THREE.BackSide}
+          />
+        </mesh>
+      )}
+      
+      {/* Selection glow for cylinder */}
+      {isSelected && object.type === 'cylinder' && (
+        <mesh
+          position={object.position}
+          scale={object.scale.map(s => s * 1.05)}
+          rotation={[
+            object.rotation[0] * (Math.PI / 180),
+            object.rotation[1] * (Math.PI / 180),
+            object.rotation[2] * (Math.PI / 180)
+          ]}
+        >
+          <cylinderGeometry args={[1, 1, 2, 32]} />
+          <meshBasicMaterial 
+            color="#00ff00" 
+            transparent={true}
+            opacity={0.2}
+            side={THREE.BackSide}
+          />
+        </mesh>
+      )}
+      
+      {/* Selection glow for capsule */}
+      {isSelected && object.type === 'capsule' && (
+        <mesh
+          position={object.position}
+          scale={object.scale.map(s => s * 1.05)}
+          rotation={[
+            object.rotation[0] * (Math.PI / 180),
+            object.rotation[1] * (Math.PI / 180),
+            object.rotation[2] * (Math.PI / 180)
+          ]}
+        >
+          <capsuleGeometry args={[0.5, 1, 4, 8]} />
+          <meshBasicMaterial 
+            color="#00ff00" 
+            transparent={true}
+            opacity={0.2}
+            side={THREE.BackSide}
+          />
+        </mesh>
+      )}
+      
+      {/* Selection glow for pyramid */}
+      {isSelected && object.type === 'pyramid' && (
+        <mesh
+          position={object.position}
+          scale={object.scale.map(s => s * 1.05)}
+          rotation={[
+            object.rotation[0] * (Math.PI / 180),
+            object.rotation[1] * (Math.PI / 180),
+            object.rotation[2] * (Math.PI / 180)
+          ]}
+        >
+          <coneGeometry args={[1, 2, 4]} />
+          <meshBasicMaterial 
+            color="#00ff00" 
+            transparent={true}
+            opacity={0.2}
+            side={THREE.BackSide}
+          />
+        </mesh>
+      )}
+      
+      {/* Selection glow for torus */}
+      {isSelected && object.type === 'torus' && (
+        <mesh
+          position={object.position}
+          scale={object.scale.map(s => s * 1.05)}
+          rotation={[
+            object.rotation[0] * (Math.PI / 180),
+            object.rotation[1] * (Math.PI / 180),
+            object.rotation[2] * (Math.PI / 180)
+          ]}
+        >
+          <torusGeometry args={[1, 0.4, 16, 100]} />
           <meshBasicMaterial 
             color="#00ff00" 
             transparent={true}

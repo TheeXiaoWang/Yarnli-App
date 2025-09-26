@@ -174,6 +174,7 @@ const YarnList = ({ yarns, pendingYarnStart, hoverPreview, selectedYarnId, onSel
                     start={y.start} 
                     end={y.end} 
                     radius={y.radius}
+                    color={y.color}
                     nodeDepth={nodeDepth}
                     orbitalDistance={orbitalDistance}
                     center={center}

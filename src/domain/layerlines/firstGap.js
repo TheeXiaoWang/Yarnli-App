@@ -43,4 +43,95 @@ export function conePerimeterAtDistanceFactory({ matrix, dir }) {
   }
 }
 
+// Convenience for cylinders: perimeter of constant-radius circle
+export function cylinderPerimeterAtDistanceFactory({ matrix, dir }) {
+  const c0w = new THREE.Vector3().setFromMatrixColumn(matrix, 0)
+  const c2w = new THREE.Vector3().setFromMatrixColumn(matrix, 2)
+  const project = (v) => v.clone().sub(dir.clone().multiplyScalar(v.dot(dir)))
+  const aW = project(c0w).length()
+  const bW = project(c2w).length()
+  const radius = Math.max(aW, bW)
+  return (dWorld) => 2 * Math.PI * radius
+}
+
+// Convenience for capsules: perimeter varies with height (hemispheres + cylinder)
+export function capsulePerimeterAtDistanceFactory({ matrix, dir }) {
+  const axisLen = new THREE.Vector3().setFromMatrixColumn(matrix, 1).length()
+  const c0w = new THREE.Vector3().setFromMatrixColumn(matrix, 0)
+  const c2w = new THREE.Vector3().setFromMatrixColumn(matrix, 2)
+  const project = (v) => v.clone().sub(dir.clone().multiplyScalar(v.dot(dir)))
+  const aW = project(c0w).length()
+  const bW = project(c2w).length()
+  const radius = Math.max(aW, bW)
+  return (dWorld) => {
+    const tLocal = dWorld / Math.max(axisLen, 1e-9)
+    let radiusLocal = 0.5 // Base radius for capsule
+    
+    // Adjust radius based on position along the capsule
+    if (tLocal < 0.5) {
+      // Bottom hemisphere
+      const hemisphereT = tLocal * 2 // 0 to 1
+      radiusLocal = 0.5 * Math.sin(hemisphereT * Math.PI / 2)
+    } else if (tLocal > 1.5) {
+      // Top hemisphere
+      const hemisphereT = (tLocal - 1.5) * 2 // 0 to 1
+      radiusLocal = 0.5 * Math.sin(hemisphereT * Math.PI / 2)
+    }
+    // Middle section (tLocal 0.5 to 1.5) keeps constant radius 0.5
+    
+    return 2 * Math.PI * radiusLocal * radius
+  }
+}
+
+// Convenience for pyramids: perimeter grows linearly from apex to base
+export function pyramidPerimeterAtDistanceFactory({ matrix, dir }) {
+  const axisLen = new THREE.Vector3().setFromMatrixColumn(matrix, 1).length()
+  const c0w = new THREE.Vector3().setFromMatrixColumn(matrix, 0)
+  const c2w = new THREE.Vector3().setFromMatrixColumn(matrix, 2)
+  const project = (v) => v.clone().sub(dir.clone().multiplyScalar(v.dot(dir)))
+  const aW = project(c0w).length()
+  const bW = project(c2w).length()
+  const radius = Math.max(aW, bW)
+  return (dWorld) => {
+    const tLocal = dWorld / Math.max(axisLen, 1e-9)
+    const radiusLocal = tLocal / 2 // Linear increase from 0 at apex to 1 at base
+    return 2 * Math.PI * radiusLocal * radius
+  }
+}
+
+// Convenience for torus: perimeter varies based on cross-section radius
+export function torusPerimeterAtDistanceFactory({ matrix, dir }) {
+  const axisLen = new THREE.Vector3().setFromMatrixColumn(matrix, 1).length()
+  const c0w = new THREE.Vector3().setFromMatrixColumn(matrix, 0)
+  const c2w = new THREE.Vector3().setFromMatrixColumn(matrix, 2)
+  const project = (v) => v.clone().sub(dir.clone().multiplyScalar(v.dot(dir)))
+  const aW = project(c0w).length()
+  const bW = project(c2w).length()
+  const radius = Math.max(aW, bW)
+  return (dWorld) => {
+    const tLocal = dWorld / Math.max(axisLen, 1e-9)
+    const majorRadius = 1.0
+    const minorRadius = 0.4
+    const distanceFromCenter = Math.abs(tLocal)
+    
+    let radiusLocal = 0
+    if (distanceFromCenter < majorRadius - minorRadius) {
+      // Inside the torus hole
+      radiusLocal = 0
+    } else if (distanceFromCenter < majorRadius + minorRadius) {
+      // In the torus body
+      const d = distanceFromCenter
+      const R = majorRadius
+      const r = minorRadius
+      // Solve: (d - R)^2 + z^2 = r^2 for z
+      const discriminant = r * r - (d - R) * (d - R)
+      if (discriminant >= 0) {
+        radiusLocal = Math.sqrt(discriminant)
+      }
+    }
+    
+    return 2 * Math.PI * radiusLocal * radius
+  }
+}
+
 

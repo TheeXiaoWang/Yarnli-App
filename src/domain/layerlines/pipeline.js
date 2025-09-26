@@ -99,6 +99,10 @@ export function generateLayerLines(objects, settings) {
     if (obj.type === 'sphere') result = Generators.generateSphereLayers(obj, perCall, maxLayers)
     else if (obj.type === 'cone') result = Generators.generateConeLayers(obj, perCall, maxLayers)
     else if (obj.type === 'triangle') result = Generators.generateTriangleLayers(obj, perCall, maxLayers)
+    else if (obj.type === 'cylinder') result = Generators.generateCylinderLayers(obj, perCall, maxLayers)
+    else if (obj.type === 'capsule') result = Generators.generateCapsuleLayers(obj, perCall, maxLayers)
+    else if (obj.type === 'pyramid') result = Generators.generatePyramidLayers(obj, perCall, maxLayers)
+    else if (obj.type === 'torus') result = Generators.generateTorusLayers(obj, perCall, maxLayers)
 
     // Detect primary axis once per object for downstream consumers
     try {

@@ -104,21 +104,60 @@ const LeftSidebar = () => {
             onDragStart={(e) => handleDragStart(e, 'cone')}
           >
             <svg viewBox="0 0 24 24">
-              <path d="M12 2L4 20h16L12 2z" fill="none" stroke="currentColor" strokeWidth="2"/>
+              <path d="M12 2L4 20M12 2L20 20" fill="none" stroke="currentColor" strokeWidth="2"/>
+              <path d="M4 20A8 2 0 0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"/>
             </svg>
             Cone
           </button>
-          <button className="tool-btn" draggable onDragStart={(e) => handleDragStart(e, 'cube')}>
+          <button 
+            className="tool-btn"
+            onClick={() => handleAddObject('cylinder')}
+            draggable
+            onDragStart={(e) => handleDragStart(e, 'cylinder')}
+          >
             <svg viewBox="0 0 24 24">
-              <rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" strokeWidth="2"/>
-            </svg>
-            Cube
-          </button>
-          <button className="tool-btn" draggable onDragStart={(e) => handleDragStart(e, 'cylinder')}>
-            <svg viewBox="0 0 24 24">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" fill="none" stroke="currentColor" strokeWidth="2"/>
+              <ellipse cx="12" cy="6" rx="8" ry="2" fill="none" stroke="currentColor" strokeWidth="2"/>
+              <path d="M4 6L4 18M20 6L20 18" fill="none" stroke="currentColor" strokeWidth="2"/>
+              <path d="M4 18A8 2 0 0 0 20 18" fill="none" stroke="currentColor" strokeWidth="2"/>
             </svg>
             Cylinder
+          </button>
+          <button 
+            className="tool-btn"
+            onClick={() => handleAddObject('capsule')}
+            draggable
+            onDragStart={(e) => handleDragStart(e, 'capsule')}
+          >
+            <svg viewBox="0 0 24 24">
+              <path d="M4 8A8 6 0 0 1 20 8" fill="none" stroke="currentColor" strokeWidth="2"/>
+              <path d="M4 8L4 16M20 8L20 16" fill="none" stroke="currentColor" strokeWidth="2"/>
+              <path d="M4 16A8 6 0 0 0 20 16" fill="none" stroke="currentColor" strokeWidth="2"/>
+            </svg>
+            Capsule
+          </button>
+          <button 
+            className="tool-btn"
+            onClick={() => handleAddObject('pyramid')}
+            draggable
+            onDragStart={(e) => handleDragStart(e, 'pyramid')}
+          >
+            <svg viewBox="0 0 24 24">
+              <path d="M12 2L4 20h16L12 2z" fill="none" stroke="currentColor" strokeWidth="2"/>
+              <path d="M8 20L12 8L16 20" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.5"/>
+            </svg>
+            Pyramid
+          </button>
+          <button 
+            className="tool-btn"
+            onClick={() => handleAddObject('torus')}
+            draggable
+            onDragStart={(e) => handleDragStart(e, 'torus')}
+          >
+            <svg viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2"/>
+              <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="2"/>
+            </svg>
+            Torus
           </button>
         </div>
       </div>

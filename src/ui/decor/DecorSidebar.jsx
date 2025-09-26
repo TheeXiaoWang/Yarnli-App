@@ -87,15 +87,14 @@ const DecorSidebar = () => {
 
       <div className="sidebar-section">
         <h3>Eyes</h3>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:13, color:'#ccc', width:80 }}>Size</span>
-          <input type="range" min={2} max={20} value={eyeScale} onChange={(e)=>setEyeScale(Number(e.target.value))} />
-          <span style={{ fontSize:12, color:'#aaa' }}>x{eyeScale}</span>
-        </div>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:10 }}>
           <span style={{ fontSize:13, color:'#ccc', width:80 }}>Pick radius</span>
           <input type="range" min={8} max={150} value={selectionRadiusPx} onChange={(e)=>setSelectionRadiusPx(Number(e.target.value))} />
           <span style={{ fontSize:12, color:'#aaa' }}>{selectionRadiusPx}px</span>
+        </div>
+        <div style={{ fontSize:11, color:'#888', marginTop:8 }}>
+          • Select an eye in the Layers panel to adjust size<br/>
+          • Pick radius: hover detection sensitivity
         </div>
       </div>
 

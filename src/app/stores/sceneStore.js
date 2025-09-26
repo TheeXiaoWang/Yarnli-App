@@ -1,6 +1,19 @@
 import { create } from 'zustand'
 import { createHistoryHelpers } from './history'
 
+// Color assignment for different primitive types
+const getColorForType = (type) => {
+  const colorMap = {
+    sphere: '#ff6b6b',    // Red
+    cone: '#4ecdc4',      // Teal
+    cylinder: '#45b7d1',  // Blue
+    capsule: '#96ceb4',   // Green
+    pyramid: '#feca57',   // Yellow
+    torus: '#ff9ff3'      // Pink
+  }
+  return colorMap[type] || '#4ecdc4' // Default to teal
+}
+
 const useSceneStore = create((set, get) => ({
   // Scene state
   objects: [],
@@ -20,7 +33,7 @@ const useSceneStore = create((set, get) => ({
       position: [...position],
       scale: [...scale],
       rotation: [...rotation],
-      color: type === 'sphere' ? '#ff6b6b' : '#4ecdc4',
+      color: getColorForType(type),
       visible: true
     }
 

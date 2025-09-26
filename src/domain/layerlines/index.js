@@ -3,7 +3,9 @@
 
 export { generateSphereLayers } from '../shapes/sphere/layers'
 export { generateConeLayers } from '../shapes/cone/layers'
-
-// Export triangle layers function as generateTriangleLayers
 export { generateTriangleLayers } from '../shapes/triangle/layers'
+export { generateCylinderLayers } from '../shapes/cylinder/layers'
+export { generateCapsuleLayers } from '../shapes/capsule/layers'
+export { generatePyramidLayers } from '../shapes/pyramid/layers'
+export { generateTorusLayers } from '../shapes/torus/layers'
 

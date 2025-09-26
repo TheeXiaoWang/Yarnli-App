@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
-const EyeWithQuaternion = ({ position, quaternion, radius = 0.12, preview = false }) => {
+const EyeWithQuaternion = ({ id, position, quaternion, radius = 0.12, preview = false, selected = false, onSelect = null, onDelete = null, onClearOthers = null }) => {
   const { camera } = useThree()
   
   // Always render eyes - removed camera facing restriction
@@ -34,12 +34,36 @@ const EyeWithQuaternion = ({ position, quaternion, radius = 0.12, preview = fals
   // Always render all eyes
   if (!shouldRender) return null
 
+  const handleClick = (e) => {
+    if (preview) return
+    e.stopPropagation()
+    if (e.shiftKey && onDelete) {
+      onDelete(id)
+    } else if (onSelect) {
+      // Clear all other selections first, then select this eye
+      if (onClearOthers) onClearOthers()
+      onSelect(id)
+    }
+  }
+
   return (
     <group position={pos} quaternion={quat} raycast={null} name={preview ? 'EyePreview' : 'Eye'}>
       <mesh 
-        raycast={null} 
         name={preview ? 'EyePreviewMesh' : 'EyeMesh'}
-        renderOrder={1001}
+        renderOrder={preview ? 1001 : 8000}
+        onClick={handleClick}
+        onPointerOver={(e) => {
+          if (!preview) {
+            e.stopPropagation()
+            document.body.style.cursor = 'pointer'
+          }
+        }}
+        onPointerOut={(e) => {
+          if (!preview) {
+            e.stopPropagation()
+            document.body.style.cursor = 'default'
+          }
+        }}
       >
         {preview ? (
           // Low-poly geometry for preview
@@ -57,14 +81,38 @@ const EyeWithQuaternion = ({ position, quaternion, radius = 0.12, preview = fals
             depthTest={false}
           />
         ) : (
-          // Complex material for final eyes
+          // Complex material for final eyes with selection highlighting
           <meshStandardMaterial
             color={0x111111}
             metalness={0.8}
             roughness={0.2}
+            emissive={selected ? 0x001122 : 0x000000}  // Subtle blue emissive when selected
+            emissiveIntensity={selected ? 0.2 : 0}
+            depthTest={true}  // Enable depth so eye can properly occlude outline
+            depthWrite={true}  // Write to depth buffer
           />
         )}
       </mesh>
+      
+      {/* Selection highlight - Outline Glow for non-preview eyes */}
+      {!preview && selected && (
+        <mesh
+          raycast={null}
+          name="EyeHighlight"
+          scale={[1.08, 1.08, 1.08]}
+          renderOrder={7000}  // Render after ALL other objects (3000) but before eye (8000)
+        >
+          <sphereGeometry args={[radius, 32, 24]} />
+          <meshBasicMaterial
+            color={0xffff66}
+            transparent
+            opacity={0.3}
+            depthTest={false}  // Always draw (ignore depth)
+            depthWrite={false}  // Don't write to depth buffer
+            side={THREE.BackSide}
+          />
+        </mesh>
+      )}
     </group>
   )
 }

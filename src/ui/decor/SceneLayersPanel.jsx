@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useMemo } from 'react'
 import { useDecorStore } from '../../app/stores/decorStore'
 
 // Modern SVG icons
@@ -24,14 +24,41 @@ const DotsIcon = () => (
   </svg>
 )
 
-const TypeIcon = ({ type }) => {
+const SearchIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="11" cy="11" r="8" />
+    <path d="m21 21-4.35-4.35" />
+  </svg>
+)
+
+const ChevronIcon = ({ expanded }) => (
+  <svg 
+    width="14" 
+    height="14" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2"
+    style={{ 
+      transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+      transition: 'transform 0.2s ease'
+    }}
+  >
+    <polyline points="9,18 15,12 9,6" />
+  </svg>
+)
+
+const TypeIcon = ({ type, color }) => {
   if (type === 'eye') return <div style={{ width:16, height:16, borderRadius:'50%', background:'#66ccff', border:'2px solid #4a90e2' }} />
-  if (type === 'yarn') return <div style={{ width:16, height:3, borderRadius:2, background:'#ff66cc' }} />
+  if (type === 'yarn') {
+    const hexColor = color ? `#${color.toString(16).padStart(6, '0')}` : '#ff66cc'
+    return <div style={{ width:16, height:3, borderRadius:2, background: hexColor }} />
+  }
   if (type === 'felt') return <div style={{ width:16, height:16, borderRadius:3, background:'#66ffcc', border:'1px solid #4dc9a0' }} />
   return null
 }
 
-const LayerRow = ({ name, id, type, hidden, onToggle, onRename, onDelete, onSelect, isSelected }) => {
+const LayerRow = ({ name, id, type, hidden, onToggle, onRename, onDelete, onSelect, isSelected, color }) => {
   const [isEditing, setIsEditing] = React.useState(false)
   const [editValue, setEditValue] = React.useState(name)
   const [showMenu, setShowMenu] = React.useState(false)
@@ -70,34 +97,34 @@ const LayerRow = ({ name, id, type, hidden, onToggle, onRename, onDelete, onSele
     onDelete()
   }
 
-  // Close menu when clicking outside
   React.useEffect(() => {
-    if (!showMenu) return
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
         setShowMenu(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showMenu])
+  }, [])
 
   return (
-    <div 
+    <div
       className="layer-row"
-      style={{ 
-        display:'flex', 
-        alignItems:'center', 
-        gap:8, 
-        padding:'8px 12px', 
-        borderRadius:6, 
-        background: isSelected ? 'rgba(102,204,255,0.15)' : hidden ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.06)', 
-        border: isSelected ? '1px solid rgba(102,204,255,0.4)' : hidden ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.12)',
-        marginBottom:4,
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 12px',
+        borderRadius: 6,
+        cursor: isEditing ? 'text' : 'pointer',
         transition: 'all 0.15s ease',
-        cursor: 'pointer',
+        background: isSelected ? 'rgba(102,204,255,0.15)' : hidden ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.06)',
+        border: isSelected ? '1px solid rgba(102,204,255,0.4)' : hidden ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.12)',
+        boxShadow: isSelected ? '0 0 12px rgba(102,204,255,0.2)' : 'none',
         opacity: hidden ? 0.5 : 1,
-        position: 'relative'
+        fontSize: 13,
+        color: isSelected ? '#e5f3ff' : hidden ? '#888' : '#e5e5f0',
+        marginBottom: 4
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -109,7 +136,7 @@ const LayerRow = ({ name, id, type, hidden, onToggle, onRename, onDelete, onSele
       }}
       onDoubleClick={handleDoubleClick}
     >
-      <TypeIcon type={type} />
+      <TypeIcon type={type} color={color} />
       {isEditing ? (
         <input
           ref={inputRef}
@@ -120,92 +147,78 @@ const LayerRow = ({ name, id, type, hidden, onToggle, onRename, onDelete, onSele
           style={{
             flex: 1,
             background: 'rgba(255,255,255,0.1)',
-            border: '1px solid #66ccff',
+            border: '1px solid rgba(102,204,255,0.6)',
             borderRadius: 4,
             padding: '4px 8px',
+            color: '#e5f3ff',
             fontSize: 13,
-            color: '#fff',
-            fontFamily: 'Inter, system-ui, sans-serif',
             outline: 'none'
           }}
+          onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <div 
-          style={{ 
-            fontSize:13, 
-            color: hidden ? '#a0a0b0' : '#e5e5f0', 
-            fontWeight:500,
-            flex:1,
-            fontFamily: 'Inter, system-ui, sans-serif',
-            letterSpacing: '-0.01em'
-          }}
-          title="Double-click to rename"
-        >
+        <div style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {name}
         </div>
       )}
-      
-      {/* 3-dot menu button - only visible on hover */}
+
       {isHovered && (
         <div style={{ position: 'relative' }}>
-          <button 
-            onClick={(e) => { 
-              e.stopPropagation(); 
-              setShowMenu(!showMenu); 
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowMenu(!showMenu)
             }}
-            style={{ 
-              background:'none', 
-              border:'none', 
-              padding:4, 
-              borderRadius:4, 
-              cursor:'pointer',
-              color: '#ccc',
-              transition: 'color 0.15s ease',
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: 4,
+              padding: '2px 6px',
+              color: '#e5e5f0',
+              cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              fontSize: 12,
+              transition: 'background 0.15s ease'
             }}
-            onMouseEnter={(e) => e.target.style.color = '#fff'}
-            onMouseLeave={(e) => e.target.style.color = '#ccc'}
-            title="More options"
+            onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.15)'}
+            onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
           >
             <DotsIcon />
           </button>
-          
-          {/* Dropdown menu */}
           {showMenu && (
-            <div 
+            <div
               ref={menuRef}
               style={{
                 position: 'absolute',
                 top: '100%',
                 right: 0,
-                marginTop: 4,
-                background: 'rgba(22,19,33,0.95)',
+                background: 'rgba(40,40,60,0.95)',
                 border: '1px solid rgba(255,255,255,0.2)',
                 borderRadius: 6,
                 padding: 4,
-                minWidth: 120,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
                 zIndex: 1000,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                minWidth: 100,
+                backdropFilter: 'blur(8px)'
               }}
             >
               <button
                 onClick={handleMenuRename}
                 style={{
                   width: '100%',
-                  padding: '8px 12px',
-                  background: 'none',
+                  padding: '6px 12px',
+                  background: 'transparent',
                   border: 'none',
                   color: '#e5e5f0',
-                  fontSize: 12,
-                  textAlign: 'left',
                   cursor: 'pointer',
                   borderRadius: 4,
+                  fontSize: 12,
+                  textAlign: 'left',
                   transition: 'background 0.15s ease'
                 }}
                 onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
-                onMouseLeave={(e) => e.target.style.background = 'none'}
+                onMouseLeave={(e) => e.target.style.background = 'transparent'}
               >
                 Rename
               </button>
@@ -213,18 +226,18 @@ const LayerRow = ({ name, id, type, hidden, onToggle, onRename, onDelete, onSele
                 onClick={handleMenuDelete}
                 style={{
                   width: '100%',
-                  padding: '8px 12px',
-                  background: 'none',
+                  padding: '6px 12px',
+                  background: 'transparent',
                   border: 'none',
-                  color: '#ff6b6b',
-                  fontSize: 12,
-                  textAlign: 'left',
+                  color: '#ff8888',
                   cursor: 'pointer',
                   borderRadius: 4,
+                  fontSize: 12,
+                  textAlign: 'left',
                   transition: 'background 0.15s ease'
                 }}
-                onMouseEnter={(e) => e.target.style.background = 'rgba(255,107,107,0.1)'}
-                onMouseLeave={(e) => e.target.style.background = 'none'}
+                onMouseEnter={(e) => e.target.style.background = 'rgba(255,136,136,0.1)'}
+                onMouseLeave={(e) => e.target.style.background = 'transparent'}
               >
                 Delete
               </button>
@@ -232,21 +245,26 @@ const LayerRow = ({ name, id, type, hidden, onToggle, onRename, onDelete, onSele
           )}
         </div>
       )}
-      
-      <button 
-        onClick={(e) => { e.stopPropagation(); onToggle(); }}
-        style={{ 
-          background:'none', 
-          border:'none', 
-          padding:4, 
-          borderRadius:4, 
-          cursor:'pointer',
-          color: hidden ? '#666' : '#ccc',
-          transition: 'color 0.15s ease'
+
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle()
         }}
-        onMouseEnter={(e) => e.target.style.color = hidden ? '#888' : '#fff'}
-        onMouseLeave={(e) => e.target.style.color = hidden ? '#666' : '#ccc'}
-        title={hidden ? 'Show layer' : 'Hide layer'}
+        style={{
+          background: 'rgba(255,255,255,0.1)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          borderRadius: 4,
+          padding: '2px 6px',
+          color: !hidden ? '#66ff99' : '#ff6666',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          fontSize: 12,
+          transition: 'all 0.15s ease'
+        }}
+        onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.15)'}
+        onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
       >
         <EyeIcon visible={!hidden} />
       </button>
@@ -254,83 +272,65 @@ const LayerRow = ({ name, id, type, hidden, onToggle, onRename, onDelete, onSele
   )
 }
 
-const SectionHeader = ({ title, color, type, count, onShowAll, onHideAll }) => (
-  <div style={{ 
-    display:'flex', 
-    justifyContent:'space-between', 
-    alignItems:'center', 
-    marginBottom:8,
-    paddingBottom:6,
-    borderBottom: `1px solid ${color}20`
+const GroupHeader = ({ title, color, type, count, expanded, onToggleExpanded, onShowAll, onHideAll, visibleCount }) => (
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 16px',
+    marginBottom: 8,
+    background: 'rgba(255,255,255,0.08)',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: 8,
+    fontSize: 14,
+    fontWeight: 600,
+    color: color
   }}>
-    <div style={{ 
-      color, 
-      fontWeight:600, 
-      fontSize:14,
-      fontFamily: 'Inter, system-ui, sans-serif',
-      letterSpacing: '-0.02em',
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8
-    }}>
-      {title}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={onToggleExpanded}>
+      <ChevronIcon expanded={expanded} />
+      <span>{title}</span>
       <span style={{ 
-        fontSize:11, 
-        fontWeight:400, 
-        color:'#888',
-        background: 'rgba(255,255,255,0.1)',
-        padding: '2px 6px',
-        borderRadius: 12
+        fontSize: 12, 
+        color: '#aaa', 
+        background: 'rgba(255,255,255,0.1)', 
+        padding: '2px 6px', 
+        borderRadius: 12 
       }}>
-        {count}
+        {visibleCount}/{count}
       </span>
     </div>
-    <div style={{ display:'flex', gap:4 }}>
-      <button 
-        onClick={onShowAll}
-        style={{ 
-          fontSize:10, 
-          padding:'4px 8px',
+    <div style={{ display: 'flex', gap: 4 }}>
+      <button
+        onClick={(e) => { e.stopPropagation(); onShowAll() }}
+        style={{
+          padding: '4px 8px',
           background: 'rgba(255,255,255,0.1)',
           border: '1px solid rgba(255,255,255,0.2)',
           borderRadius: 4,
-          color: '#ccc',
+          color: '#e5e5f0',
+          fontSize: 11,
           cursor: 'pointer',
-          fontWeight: 500,
-          transition: 'all 0.15s ease'
+          transition: 'background 0.15s ease'
         }}
-        onMouseEnter={(e) => {
-          e.target.style.background = 'rgba(255,255,255,0.15)'
-          e.target.style.color = '#fff'
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.background = 'rgba(255,255,255,0.1)'
-          e.target.style.color = '#ccc'
-        }}
+        onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.15)'}
+        onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
       >
         Show All
       </button>
-      <button 
-        onClick={onHideAll}
-        style={{ 
-          fontSize:10, 
-          padding:'4px 8px',
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.15)',
+      <button
+        onClick={(e) => { e.stopPropagation(); onHideAll() }}
+        style={{
+          padding: '4px 8px',
+          background: 'rgba(255,255,255,0.1)',
+          border: '1px solid rgba(255,255,255,0.2)',
           borderRadius: 4,
-          color: '#999',
+          color: '#e5e5f0',
+          fontSize: 11,
           cursor: 'pointer',
-          fontWeight: 500,
-          transition: 'all 0.15s ease'
+          transition: 'background 0.15s ease'
         }}
-        onMouseEnter={(e) => {
-          e.target.style.background = 'rgba(255,255,255,0.1)'
-          e.target.style.color = '#ccc'
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.background = 'rgba(255,255,255,0.05)'
-          e.target.style.color = '#999'
-        }}
+        onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.15)'}
+        onMouseLeave={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
       >
         Hide All
       </button>
@@ -338,23 +338,12 @@ const SectionHeader = ({ title, color, type, count, onShowAll, onHideAll }) => (
   </div>
 )
 
-const Section = ({ title, color, type, items }) => {
-  const { 
-    hiddenItems, 
-    toggleItemVisibility, 
-    setTypeVisible, 
-    getItemName, 
-    setItemName, 
-    removeEye, 
-    removeYarn, 
-    removeFeltPiece,
-    selectedEyeId,
-    selectedYarnId,
-    selectedFeltId,
-    selectItem
+const Group = ({ title, color, type, items, expanded, onToggleExpanded }) => {
+  const {
+    hiddenItems, toggleItemVisibility, setTypeVisible, getItemName, setItemName,
+    removeEye, removeYarn, removeFeltPiece,
+    selectedEyeId, selectedYarnId, selectedFeltId, selectItem
   } = useDecorStore()
-  
-  if (items.length === 0) return null
 
   const handleDelete = (id) => {
     if (type === 'eye') removeEye(id)
@@ -368,63 +357,355 @@ const Section = ({ title, color, type, items }) => {
     if (type === 'felt') return selectedFeltId
     return null
   }
-  
+
+  const visibleCount = items.filter(item => !hiddenItems?.has?.(`${type}:${item.id}`)).length
+
   return (
-    <div style={{ marginBottom:20 }}>
-      <SectionHeader 
+    <div style={{ marginBottom: 16 }}>
+      <GroupHeader
         title={title}
         color={color}
         type={type}
         count={items.length}
+        expanded={expanded}
+        onToggleExpanded={onToggleExpanded}
         onShowAll={() => setTypeVisible(type, true)}
         onHideAll={() => setTypeVisible(type, false)}
+        visibleCount={visibleCount}
       />
-      <div>
-        {items.map((item) => (
-          <LayerRow
-            key={`${type}-${item.id}`}
-            name={getItemName(type, item.id)}
-            id={item.id}
-            type={type}
-            hidden={hiddenItems?.has?.(`${type}:${item.id}`)}
-            isSelected={getSelectedId() === item.id}
-            onToggle={() => toggleItemVisibility(type, item.id)}
-            onRename={(newName) => setItemName(type, item.id, newName)}
-            onDelete={() => handleDelete(item.id)}
-            onSelect={() => selectItem(type, item.id)}
-          />
-        ))}
-      </div>
+      {expanded && (
+        <div style={{ paddingLeft: 8 }}>
+          {items.map((item) => (
+            <LayerRow
+              key={`${type}-${item.id}`}
+              name={getItemName(type, item.id)}
+              id={item.id}
+              type={type}
+              hidden={hiddenItems?.has?.(`${type}:${item.id}`)}
+              isSelected={getSelectedId() === item.id}
+              onToggle={() => toggleItemVisibility(type, item.id)}
+              onRename={(newName) => setItemName(type, item.id, newName)}
+              onDelete={() => handleDelete(item.id)}
+              onSelect={() => selectItem(type, item.id)}
+              color={type === 'yarn' ? item.color : undefined}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
 export default function SceneLayersPanel() {
-  const { eyes, yarns, feltPieces } = useDecorStore()
+  const { eyes, yarns, feltPieces, hiddenItems, setTypeVisible, getItemName } = useDecorStore()
+  const [searchTerm, setSearchTerm] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false)
+  const [expandedGroups, setExpandedGroups] = useState({
+    eyes: true,
+    yarns: true,
+    felt: true
+  })
+
+  console.log('SceneLayersPanel render:', { eyes: eyes.length, yarns: yarns.length, feltPieces: feltPieces.length })
+
+  // Close dropdown when clicking outside
+  React.useEffect(() => {
+    if (!showTypeDropdown) return
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('[data-dropdown]')) {
+        setShowTypeDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showTypeDropdown])
+
+  const allItems = useMemo(() => [
+    ...eyes.map(e => ({ ...e, type: 'eye' })),
+    ...yarns.map(y => ({ ...y, type: 'yarn' })),
+    ...feltPieces.map(f => ({ ...f, type: 'felt' }))
+  ], [eyes, yarns, feltPieces])
+
+  const filteredItems = useMemo(() => {
+    return allItems.filter(item => {
+      const itemName = getItemName(item.type, item.id)
+      const matchesSearch = itemName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           `${item.type} ${item.id}`.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesType = typeFilter === 'all' || item.type === typeFilter
+      return matchesSearch && matchesType
+    })
+  }, [allItems, searchTerm, typeFilter, getItemName])
+
+  const groupedItems = useMemo(() => {
+    const groups = {
+      eyes: filteredItems.filter(item => item.type === 'eye'),
+      yarns: filteredItems.filter(item => item.type === 'yarn'),
+      felt: filteredItems.filter(item => item.type === 'felt')
+    }
+    return groups
+  }, [filteredItems])
+
+  const toggleGroupExpansion = (groupName) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }))
+  }
+
+  const handleGlobalShowAll = () => {
+    setTypeVisible('eye', true)
+    setTypeVisible('yarn', true)
+    setTypeVisible('felt', true)
+  }
+
+  const handleGlobalHideAll = () => {
+    setTypeVisible('eye', false)
+    setTypeVisible('yarn', false)
+    setTypeVisible('felt', false)
+  }
+
+  const totalItems = allItems.length
+  const hasItems = totalItems > 0
+
+  // Show empty state in content area if no items
+  const emptyState = !hasItems ? (
+    <div style={{
+      padding: 24,
+      color: '#ccc',
+      textAlign: 'center',
+      fontSize: 13
+    }}>
+      No items in scene yet
+    </div>
+  ) : null
 
   return (
-    <div style={{ 
-      background: 'rgba(0,0,0,0.2)', 
-      borderRadius: 8, 
-      padding: 16,
+    <div style={{
+      background: 'rgba(255,255,255,0.05)',
       border: '1px solid rgba(255,255,255,0.1)',
-      backdropFilter: 'blur(10px)'
+      borderRadius: 8,
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%' // Take full height of container
     }}>
-      <Section title="Eyes" color="#66ccff" type="eye" items={eyes} />
-      <Section title="Yarns" color="#ff66cc" type="yarn" items={yarns} />
-      <Section title="Felt" color="#66ffcc" type="felt" items={feltPieces} />
-      
-      {eyes.length === 0 && yarns.length === 0 && feltPieces.length === 0 && (
-        <div style={{ 
-          textAlign: 'center', 
-          color: '#888', 
-          fontSize: 13,
-          fontStyle: 'italic',
-          padding: '20px 0'
-        }}>
-          No items in scene
+      {/* Persistent Header */}
+      <div style={{
+        padding: 16,
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        background: 'rgba(255,255,255,0.08)',
+        flexShrink: 0
+      }}>
+        {/* Search Bar */}
+        <div style={{ position: 'relative', marginBottom: 12 }}>
+          <input
+            type="text"
+            placeholder="Search items..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '8px 12px 8px 36px',
+              background: 'rgba(255,255,255,0.1)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: 6,
+              color: '#e5e5f0',
+              fontSize: 13,
+              outline: 'none',
+              boxSizing: 'border-box'
+            }}
+          />
+          <div style={{
+            position: 'absolute',
+            left: 12,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: '#aaa',
+            pointerEvents: 'none'
+          }}>
+            <SearchIcon />
+          </div>
         </div>
-      )}
+
+        {/* Type Filter and Global Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ position: 'relative' }} data-dropdown>
+            <button
+              onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: 6,
+                padding: '8px 12px',
+                color: '#e5e5f0',
+                fontSize: 12,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                minWidth: 100,
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = 'rgba(255,255,255,0.12)'
+                e.target.style.borderColor = 'rgba(255,255,255,0.25)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'rgba(255,255,255,0.08)'
+                e.target.style.borderColor = 'rgba(255,255,255,0.15)'
+              }}
+            >
+              <span>{typeFilter === 'all' ? 'All Types' : typeFilter === 'eye' ? 'Eyes' : typeFilter === 'yarn' ? 'Yarns' : 'Felt'}</span>
+              <ChevronIcon expanded={showTypeDropdown} />
+            </button>
+            
+            {showTypeDropdown && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                marginTop: 4,
+                background: 'rgba(255,255,255,0.15)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                borderRadius: 6,
+                padding: 4,
+                zIndex: 1000,
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                backdropFilter: 'blur(10px)'
+              }}>
+                {[
+                  { value: 'all', label: 'All Types' },
+                  { value: 'eye', label: 'Eyes' },
+                  { value: 'yarn', label: 'Yarns' },
+                  { value: 'felt', label: 'Felt' }
+                ].map(option => (
+                  <button
+                    key={option.value}
+                    onClick={() => {
+                      setTypeFilter(option.value)
+                      setShowTypeDropdown(false)
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      background: typeFilter === option.value ? 'rgba(255,255,255,0.15)' : 'transparent',
+                      border: 'none',
+                      color: typeFilter === option.value ? '#ffffff' : '#e5e5f0',
+                      fontSize: 12,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      borderRadius: 4,
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (typeFilter !== option.value) {
+                        e.target.style.background = 'rgba(255,255,255,0.1)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (typeFilter !== option.value) {
+                        e.target.style.background = 'transparent'
+                      }
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              onClick={handleGlobalShowAll}
+              style={{
+                padding: '6px 12px',
+                background: 'rgba(102,255,153,0.2)',
+                border: '1px solid rgba(102,255,153,0.4)',
+                borderRadius: 6,
+                color: '#66ff99',
+                fontSize: 11,
+                cursor: 'pointer',
+                transition: 'background 0.15s ease'
+              }}
+              onMouseEnter={(e) => e.target.style.background = 'rgba(102,255,153,0.3)'}
+              onMouseLeave={(e) => e.target.style.background = 'rgba(102,255,153,0.2)'}
+            >
+              Show All
+            </button>
+            <button
+              onClick={handleGlobalHideAll}
+              style={{
+                padding: '6px 12px',
+                background: 'rgba(255,102,102,0.2)',
+                border: '1px solid rgba(255,102,102,0.4)',
+                borderRadius: 6,
+                color: '#ff6666',
+                fontSize: 11,
+                cursor: 'pointer',
+                transition: 'background 0.15s ease'
+              }}
+              onMouseEnter={(e) => e.target.style.background = 'rgba(255,102,102,0.3)'}
+              onMouseLeave={(e) => e.target.style.background = 'rgba(255,102,102,0.2)'}
+            >
+              Hide All
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Content Area */}
+      <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+        {emptyState || (
+          <>
+            {groupedItems.eyes.length > 0 && (
+              <Group
+                title="Eyes"
+                color="#66ccff"
+                type="eye"
+                items={groupedItems.eyes}
+                expanded={expandedGroups.eyes}
+                onToggleExpanded={() => toggleGroupExpansion('eyes')}
+              />
+            )}
+            {groupedItems.yarns.length > 0 && (
+              <Group
+                title="Yarns"
+                color="#ff66cc"
+                type="yarn"
+                items={groupedItems.yarns}
+                expanded={expandedGroups.yarns}
+                onToggleExpanded={() => toggleGroupExpansion('yarns')}
+              />
+            )}
+            {groupedItems.felt.length > 0 && (
+              <Group
+                title="Felt"
+                color="#66ffcc"
+                type="felt"
+                items={groupedItems.felt}
+                expanded={expandedGroups.felt}
+                onToggleExpanded={() => toggleGroupExpansion('felt')}
+              />
+            )}
+            {filteredItems.length === 0 && hasItems && (
+              <div style={{
+                textAlign: 'center',
+                padding: 32,
+                color: '#888',
+                fontSize: 13
+              }}>
+                <div style={{ marginBottom: 8 }}>No items match your search</div>
+                <div style={{ fontSize: 11, color: '#666' }}>
+                  Try adjusting your search term or filter
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

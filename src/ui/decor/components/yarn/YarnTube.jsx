@@ -145,6 +145,10 @@ const YarnTube = ({ start, end, radius = 0.06, color = null, id = null, selected
         return new THREE.TubeGeometry(curve, 32, radius, 12, false) // Higher resolution for smoother curves
     }, [curve, radius])
 
+    const outlineTubular = useMemo(() => {
+        return new THREE.TubeGeometry(curve, 32, radius * 1.35, 12, false) // Slightly thicker outline
+    }, [curve, radius])
+
     // Generate yarn color based on ID for variety
     const yarnColor = useMemo(() => {
         if (color) return color
@@ -173,6 +177,9 @@ const YarnTube = ({ start, end, radius = 0.06, color = null, id = null, selected
         if (e.shiftKey && onDelete) {
             onDelete(id)
         } else if (onSelect) {
+            // Clear all other selections first, then select this yarn
+            const { clearAllSelections } = require('../../../../app/stores/decorStore').useDecorStore.getState()
+            clearAllSelections()
             onSelect(id)
         }
     }
@@ -194,23 +201,24 @@ const YarnTube = ({ start, end, radius = 0.06, color = null, id = null, selected
                 }}
             >
                 <meshStandardMaterial 
-                    color={selected ? 0xffffff : yarnColor}
+                    color={yarnColor}  // Keep true color always
                     roughness={0.85} 
                     metalness={0.01}
-                    emissive={selected ? yarnColor : 0x000000}
-                    emissiveIntensity={selected ? 0.3 : 0}
+                    emissive={selected ? 0x001122 : 0x000000}  // Subtle blue emissive when selected
+                    emissiveIntensity={selected ? 0.15 : 0}
                     transparent={false}
                 />
             </mesh>
             
-            {/* Selection highlight */}
+            {/* Selection highlight - Outline Glow */}
             {selected && (
-                <mesh geometry={tubular} name="YarnHighlight">
+                <mesh geometry={outlineTubular} name="YarnHighlight" renderOrder={6000}>
                     <meshBasicMaterial 
-                        color={0xffffff}
+                        color={0x00ffff}  // Bright cyan outline
                         transparent
-                        opacity={0.2}
-                        depthTest={false}
+                        opacity={0.6}
+                        depthTest={true}
+                        side={THREE.BackSide}  // Render only the back faces for outline effect
                     />
                 </mesh>
             )}
