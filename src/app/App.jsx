@@ -285,7 +285,15 @@ function OverlaySliders() {
         max={Math.max(0, maxLayers)} 
         value={Math.min(ui.nodeLayerVisibleCount || 0, Math.max(0, maxLayers))}
         onChange={(e)=>setVisibility({ nodeLayerVisibleCount: Number(e.target.value) })}
-        style={{ position:'fixed', right:'5%', top:'50%', transform:'translateY(-50%) rotate(270deg)', width:'40vh', zIndex:1000 }}
+        className="layer-slider"
+        style={{ 
+          position:'fixed', 
+          right:'calc(210px + 20px)', 
+          top:'50%', 
+          transform:'translateY(-50%) rotate(270deg)', 
+          width:'40vh', 
+          zIndex:1000 
+        }}
       />
 
       {/* Bottom-centered horizontal slider: Node index path */}
