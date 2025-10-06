@@ -2,14 +2,28 @@ import * as THREE from 'three'
 import { computeStitchDimensions } from './stitches'
 import { STITCH_TYPES } from '../../constants/stitchTypes'
 
-// Compute desired first-ring circumference for 5 edge stitches
+// Compute desired first-ring circumference for N edge stitches
+// Uses magicRingDefaultStitches setting if available, otherwise defaults to 5
 export function desiredFirstCircumference(settings) {
   const gauge = computeStitchDimensions({ sizeLevel: settings?.yarnSizeLevel ?? 4, baseWidth: 1, baseHeight: 1 })
   const edge = STITCH_TYPES.edge || STITCH_TYPES.sc
   const widthMul = edge.widthMul ?? ((edge.width ?? 0.5) / 0.5)
   const PACKING = 0.9
   const spacing = gauge.width * widthMul * PACKING
-  return Math.max(1e-6, 5 * spacing)
+
+  // Use magicRingDefaultStitches setting if available, otherwise default to 5
+  const stitchCount = Number.isFinite(settings?.magicRingDefaultStitches)
+    ? Math.max(3, Math.round(settings.magicRingDefaultStitches))
+    : 5
+
+  console.log('[FirstGap] Calculating desired circumference:', {
+    'magicRingDefaultStitches': settings?.magicRingDefaultStitches,
+    'stitchCount': stitchCount,
+    'spacing': spacing.toFixed(4),
+    'circumference': (stitchCount * spacing).toFixed(4),
+  })
+
+  return Math.max(1e-6, stitchCount * spacing)
 }
 
 // Generic binary search helper: find smallest gap d in [0, hi]

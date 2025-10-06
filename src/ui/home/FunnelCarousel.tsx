@@ -60,54 +60,53 @@ const FunnelCarousel = () => {
             </h1>
           </div>
 
-          {/* Horizontal Scroll List */}
-          <div className="w-full overflow-x-auto">
-            <div className="flex gap-3 w-max pr-3">
-              {slides.map((slide) => (
-                <div key={slide.id} className="w-[320px] md:w-[360px] lg:w-[380px] flex-shrink-0">
-                  <div className="p-1">
-                    <div className={`yarn-card relative overflow-hidden rounded-2xl p-8 h-[400px] flex flex-col justify-between ${slide.background}`}>
-                      {/* Icon placeholder */}
-                      <div className="flex justify-center mb-6">
-                        <div className="p-4 rounded-full bg-card/80 backdrop-blur border" style={{borderColor: 'hsl(var(--border) / 0.5)'}}>
-                          <span className="h-8 w-8 text-primary inline-block">✦</span>
-                        </div>
-                      </div>
-
-                      {/* Content */}
-                      <div className="text-center flex-grow">
-                        <h3 className="text-2xl font-bold text-foreground mb-2">
-                          {slide.title}
-                        </h3>
-                        <p className="text-primary font-semibold mb-4">
-                          {slide.subtitle}
-                        </p>
-                        <p className="text-gray-500 text-sm mb-6">
-                          {slide.description}
-                        </p>
-                      </div>
-
-                      {/* Button */}
-                      <div className="flex justify-center">
-                        <a href={slide.buttonLink} className="yarn-button group w-full max-w-48 inline-flex items-center justify-center rounded-xl px-4 py-2">
-                          {slide.variant === 'default' && <span className="mr-2">✨</span>}
-                          {slide.buttonText}
-                          <span className="ml-2 transition-transform group-hover:translate-x-1">→</span>
-                        </a>
-                      </div>
+          {/* Responsive Grid Layout - No horizontal scroll */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+            {slides.map((slide) => (
+              <div key={slide.id} className="flex justify-center">
+                <div className={`yarn-card relative overflow-hidden p-8 h-[420px] w-full max-w-[400px] flex flex-col justify-between ${slide.background}`}>
+                  {/* Icon placeholder */}
+                  <div className="flex justify-center mb-6">
+                    <div className="p-4 rounded-full backdrop-blur border" style={{
+                      backgroundColor: 'hsl(var(--card) / 0.8)',
+                      borderColor: 'hsl(var(--border) / 0.5)'
+                    }}>
+                      <span className="h-8 w-8 inline-block" style={{color: 'hsl(var(--primary))'}}>✦</span>
                     </div>
                   </div>
+
+                  {/* Content */}
+                  <div className="text-center flex-grow">
+                    <h3 className="text-2xl font-bold mb-2" style={{color: 'hsl(var(--foreground))'}}>
+                      {slide.title}
+                    </h3>
+                    <p className="font-semibold mb-4" style={{color: 'hsl(var(--primary))'}}>
+                      {slide.subtitle}
+                    </p>
+                    <p className="text-sm mb-6" style={{color: 'hsl(var(--muted-foreground))'}}>
+                      {slide.description}
+                    </p>
+                  </div>
+
+                  {/* Button */}
+                  <div className="flex justify-center">
+                    <a href={slide.buttonLink} className="yarn-button group w-full max-w-[200px] inline-flex items-center justify-center px-6 py-3">
+                      {slide.variant === 'default' && <span className="mr-2">✨</span>}
+                      {slide.buttonText}
+                      <span className="ml-2 transition-transform group-hover:translate-x-1">→</span>
+                    </a>
+                  </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
 
           {/* Bottom CTA */}
           <div className="text-center mt-16">
-            <p className="text-lg text-gray-500 mb-6">
+            <p className="text-lg mb-6" style={{color: 'hsl(var(--muted-foreground))'}}>
               Ready to start your yarn art journey?
             </p>
-            <a href="#/signup" className="yarn-button group text-lg px-8 py-4 inline-flex items-center justify-center rounded-xl">
+            <a href="#/signup" className="yarn-button group text-lg px-8 py-4 inline-flex items-center justify-center">
               <span className="mr-3">✨</span>
               Join Yarnli Today
               <span className="ml-3 transition-transform group-hover:translate-x-2">→</span>

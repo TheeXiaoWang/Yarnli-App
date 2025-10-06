@@ -14,6 +14,17 @@ import { getQuaternionFromTN } from '../../utils/nodes/orientation/getQuaternion
 const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, showScaffold = true, showConnections = false, showPoints = false, objectType = null }) => {
   const nodeData = useMemo(() => {
     if (!nodeRing0?.nodes) return []
+
+    // Debug logging to identify which layer is being rendered
+    console.log('[NodeViewer] Rendering nodes:', {
+      'nodeCount': nodeRing0.nodes.length,
+      'color': color,
+      'isMagicRing': nodeRing0.meta?.isMagicRing,
+      'layerY': nodeRing0.meta?.y,
+      'isYellow (magic ring)': color === '#ffaa00',
+      'isCyan (Layer 1+)': color === '#00aaff',
+    })
+
     const out = []
     for (const n of nodeRing0.nodes) {
       if (Array.isArray(n?.p) && n.p.length === 3) {
@@ -45,6 +56,34 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
         out.push(entry)
       }
     }
+
+    // DEBUG: Log quaternion data received by NodeViewer
+    if (import.meta?.env?.DEV && out.length > 0) {
+      const quaternionCount = out.filter(n => n.quaternion).length
+      const layerY = nodeRing0?.meta?.y
+
+      // Track first and last layers
+      if (typeof window !== 'undefined') {
+        if (!window.__FIRST_LAYER_Y_VIEWER) {
+          window.__FIRST_LAYER_Y_VIEWER = layerY
+          window.__FIRST_LAYER_QUAT_VIEWER = out[0]?.quaternion
+        }
+        window.__LAST_LAYER_Y_VIEWER = layerY
+        window.__LAST_LAYER_QUAT_VIEWER = out[0]?.quaternion
+      }
+
+      console.log('[NodeViewer] Received nodes:', {
+        totalNodes: out.length,
+        nodesWithQuaternion: quaternionCount,
+        layerY: layerY,
+        firstNodeQuaternion: out[0]?.quaternion,
+        firstNodeTheta: out[0]?.theta,
+        firstNodeThetaDeg: out[0]?.theta ? THREE.MathUtils.radToDeg(out[0].theta) : null,
+        lastNodeQuaternion: out[out.length - 1]?.quaternion,
+        ringMeta: nodeRing0?.meta,
+      })
+    }
+
     return out
   }, [nodeRing0])
 
@@ -181,10 +220,57 @@ const NodeViewer = ({ nodeRing0, scaffold, color = '#ffaa00', showNodes = true, 
               // Use baked quaternion
               ref.current.quaternion.fromArray(quaternion)
               quaternionData.push({ idx, quaternion, theta })
+
+              // DEBUG: Log quaternion application for first 3 nodes
+              if (import.meta?.env?.DEV && idx < 3) {
+                console.log(`[NodeViewer] Applied quaternion to node ${idx}:`, {
+                  quaternion,
+                  theta,
+                  thetaDeg: theta ? THREE.MathUtils.radToDeg(theta) : null,
+                  position: [position.x, position.y, position.z],
+                })
+              }
+
+              // COMPREHENSIVE DEBUG: Track first and last layer node 0 quaternions
+              if (import.meta?.env?.DEV && idx === 0 && typeof window !== 'undefined') {
+                const layerY = nodeRing0?.meta?.y
+                if (layerY === window.__FIRST_LAYER_Y_VIEWER) {
+                  console.log('[NodeViewer] FIRST LAYER - Applied quaternion to mesh:', {
+                    layerY,
+                    quaternion,
+                    theta,
+                    thetaDeg: theta ? THREE.MathUtils.radToDeg(theta) : null,
+                    position: [position.x, position.y, position.z],
+                  })
+                }
+                if (layerY === window.__LAST_LAYER_Y_VIEWER) {
+                  console.log('[NodeViewer] LAST LAYER - Applied quaternion to mesh:', {
+                    layerY,
+                    quaternion,
+                    theta,
+                    thetaDeg: theta ? THREE.MathUtils.radToDeg(theta) : null,
+                    position: [position.x, position.y, position.z],
+                  })
+                }
+              }
             } else if (tangent && normal) {
               const q = getQuaternionFromTN(tangent, normal, 0)
               ref.current.quaternion.copy(q)
               quaternionData.push({ idx, quaternion: q.toArray(), theta: 0, type: 'fallback' })
+
+              // DEBUG: Log fallback quaternion
+              if (import.meta?.env?.DEV && idx < 3) {
+                console.log(`[NodeViewer] Applied FALLBACK quaternion to node ${idx}:`, {
+                  quaternion: q.toArray(),
+                  tangent: [tangent.x, tangent.y, tangent.z],
+                  normal: [normal.x, normal.y, normal.z],
+                })
+              }
+            } else {
+              // DEBUG: Log missing quaternion data
+              if (import.meta?.env?.DEV && idx < 3) {
+                console.warn(`[NodeViewer] Node ${idx} has NO quaternion or tangent/normal data!`)
+              }
             }
             // Attach axes helper for node id == 0 (per-ring debug)
             try {

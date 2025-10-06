@@ -16,7 +16,17 @@ const NodeLayers = ({
 
     const vis = alwaysShowAllNodes ? (nextLayersPoints?.length || 0) : Math.max(0, ui?.nodeLayerVisibleCount || 0)
     const out = []
-    
+
+    // Debug logging to identify which layer is visible
+    console.log('[NodeLayers] Rendering decision:', {
+        'nodeLayerVisibleCount': ui?.nodeLayerVisibleCount,
+        'vis': vis,
+        'magicRingNodeCount': nodes?.nodes?.length,
+        'nextLayersCount': nextLayersPoints?.length,
+        'willShowMagicRing': vis === 0,
+        'willShowLayer1+': vis > 0,
+    })
+
     if (nodes && Array.isArray(nodes.nodes)) {
         if (!alwaysShowAllNodes && vis === 0) {
             const cap = Math.min(Math.max(1, ui?.nodeVisibleCount || 1), nodes.nodes.length)

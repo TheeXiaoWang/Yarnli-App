@@ -6,10 +6,14 @@ import SceneLayersPanel from './SceneLayersPanel'
 import SelectionPropertiesPanel from './SelectionPropertiesPanel'
 import DecorScene from './DecorScene'
 import FeltModal from './components/felt/FeltModal'
+import CustomShapeEditor from './components/felt/CustomShapeEditor'
+import FeltPreviewFeedback from './components/felt/FeltPreviewFeedback'
+import { useDecorStore } from '../../app/stores/decorStore'
 import '../editor/dev-stage.css'
 
 const DecorPage = () => {
   const [dpr, setDpr] = useState([1, 1.25])
+  const { tool } = useDecorStore()
 
   return (
     <div className="cad-layout">
@@ -64,13 +68,19 @@ const DecorPage = () => {
           <SelectionPropertiesPanel />
           <div style={{ color:'#a0a0ff', fontWeight:600, marginTop:12 }}>Tips</div>
           <div style={{ fontSize:13, color:'#ddd' }}>
-            Select tool: Eyes places a hemisphere at a grid point. Yarn creates a noodle from first clicked grid point to second. Felt opens cutting modal.
+            Select tool: Eyes places a hemisphere at a grid point. Yarn creates a noodle from first clicked grid point to second. Felt allows free-form placement on surfaces.
           </div>
         </div>
       </div>
 
-      {/* Felt Modal - rendered at page level */}
+      {/* Felt Modal - rendered at page level (legacy, will be removed) */}
       <FeltModal />
+
+      {/* Custom Shape Editor - slide-out drawer */}
+      <CustomShapeEditor />
+
+      {/* Felt Preview Feedback - cursor hints and tooltips */}
+      <FeltPreviewFeedback tool={tool} />
     </div>
   )
 }

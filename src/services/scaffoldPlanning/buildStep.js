@@ -6,7 +6,6 @@ import { mapBucketsMonotonic } from '../../domain/nodes/transitions/mapBuckets'
 import { mapBucketsLinear, allocateCountsMin1 } from '../nodes/mapping'
 import { isClosed, nearestOnPolyline, nearestPolylineId } from './helpers/polylineUtils'
 import { buildNodes } from '../nodes/buildNodes'
-import { computeRollFromCircumference, computeRingRollAngleFromCenter } from '../nodeOrientation/computeTilt'
 
 // Pure step builder: from currentNodes -> next layer (polyline + y, radius)
 // returns { segments, nextNodes, parentToChildren }
@@ -26,8 +25,10 @@ export function buildScaffoldStep({
   yarnWidth = 0,
   stitchType = 'sc',
   tiltScale = 1.0,
+  rollAngle = null, // Pre-calculated tilt angle from sphere tilt pipeline
 }) {
-  // Dynamic tilt scale based on sphere axis ratio (if provided on the layer)
+  // Dynamic tilt scale for fallback circumference-based formula only
+  // NOTE: This is NOT used for the corrected sphere-based formula
   const dynamicTiltScaleForLayer = (layer) => {
     try {
       const r = Number(layer?.meta?.axisRatio)
@@ -38,37 +39,6 @@ export function buildScaffoldStep({
     } catch (_) { return 1.0 }
   }
   const metaCenterArr = center
-
-  // Estimate in-plane anisotropy (stretch) from polyline points; returns a modulation in [0.5, 1]
-  // 1.0 for nearly circular rings; decreases toward 0.5 as ellipse anisotropy grows.
-  const computeStretchMod = (pts, ringCenterV, upV) => {
-    try {
-      if (!Array.isArray(pts) || pts.length < 4) return 1.0
-      const n = upV.clone().normalize()
-      let seed = Math.abs(n.y) < 0.9 ? new THREE.Vector3(0,1,0) : new THREE.Vector3(1,0,0)
-      const u = seed.sub(n.clone().multiplyScalar(seed.dot(n))).normalize()
-      const v = new THREE.Vector3().crossVectors(n, u)
-      let sumXX = 0, sumYY = 0
-      for (const p of pts) {
-        const P = Array.isArray(p) ? new THREE.Vector3(p[0], p[1], p[2]) : new THREE.Vector3(p.x, p.y, p.z)
-        const d = P.clone().sub(ringCenterV)
-        const x = d.dot(u)
-        const y = d.dot(v)
-        sumXX += x * x
-        sumYY += y * y
-      }
-      const N = Math.max(1, pts.length)
-      const varX = sumXX / N
-      const varY = sumYY / N
-      const maxVar = Math.max(varX, varY)
-      const minVar = Math.max(1e-12, Math.min(varX, varY))
-      const anisotropy = Math.max(1.0, Math.sqrt(maxVar / minVar))
-      // Gentle falloff: gamma=0.5 → mod = 1 / sqrt(anisotropy); clamp to [0.5,1]
-      const gamma = 0.5
-      const mod = Math.max(0.1, Math.min(1.0, 1.0 / Math.pow(anisotropy, gamma)))
-      return mod
-    } catch (_) { return 1.0 }
-  }
   let { nodes: nextNodes } = distributeNextNodes({ yNext, rNext, nextCount, center: metaCenterArr, up, handedness })
   if (currentNodes && currentNodes.length > 0 && nextNodes && nextNodes.length > 0) {
     const aligned = alignNextRingByAzimuthAxis(currentNodes.map(n => n.p), nextNodes.map(n => n.p), metaCenterArr, up, handedness)
@@ -148,20 +118,12 @@ export function buildScaffoldStep({
       if (layer?.meta?.shape === 'cone') {
         const coneTilt = Number(layer?.meta?.coneTilt)
         const rollFromCirc = Number.isFinite(coneTilt) ? coneTilt : (Math.PI / 4)
-        const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
+        const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType, layer?.meta)
         nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
         return { segments: segs, nextCurrentNodes, parentToChildren }
       }
-      const effTiltScale = dynamicTiltScaleForLayer(layer)
-      let rollFromCirc = computeRollFromCircumference(thisCirc, Math.max(thisCirc, Number(maxCircumference) || thisCirc)) * effTiltScale
-      try {
-        const { latitude } = computeRingRollAngleFromCenter(ringCenterV, sphereCenterV, rNext, upV)
-        const mod = 0.5 + 0.5 * Math.abs(Math.sin(2 * latitude))
-        rollFromCirc *= mod
-      } catch (_) {}
-      // Apply stretch modulation from the closed-ring polyline
-      try { rollFromCirc *= computeStretchMod(poly, ringCenterV, upV) } catch (_) {}
-      const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
+      // Use pre-calculated tilt angle from sphere tilt pipeline
+      const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollAngle, hemiSign, stitchType, layer?.meta)
       nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
       return { segments: segs, nextCurrentNodes, parentToChildren }
     }
@@ -259,24 +221,12 @@ export function buildScaffoldStep({
     if (layer?.meta?.shape === 'cone') {
       const coneTilt = Number(layer?.meta?.coneTilt)
       const rollFromCirc = Number.isFinite(coneTilt) ? coneTilt : (Math.PI / 4)
-      const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
+      const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType, layer?.meta)
       nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
       return { segments: segs, nextCurrentNodes, parentToChildren: parentToChildrenGlobal }
     }
-    const effTiltScale = dynamicTiltScaleForLayer(layer)
-    let rollFromCirc = computeRollFromCircumference(thisCirc, Math.max(thisCirc, Number(maxCircumference) || thisCirc)) * effTiltScale
-    try {
-      const { latitude } = computeRingRollAngleFromCenter(ringCenterV, sphereCenterV, rNext, upV)
-      const mod = 0.5 + 0.5 * Math.abs(Math.sin(2 * latitude))
-      rollFromCirc *= mod
-    } catch (_) {}
-    // For cut rings, estimate stretch from all arc points combined
-    try {
-      const allPts = []
-      for (const a of arcs) for (const p of a) allPts.push(p)
-      rollFromCirc *= computeStretchMod(allPts, ringCenterV, upV)
-    } catch (_) {}
-    const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
+    // Use pre-calculated tilt angle from sphere tilt pipeline
+    const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollAngle, hemiSign, stitchType, layer?.meta)
     nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
     return { segments: segs, nextCurrentNodes, parentToChildren: parentToChildrenGlobal }
   }
@@ -382,19 +332,12 @@ export function buildScaffoldStep({
   if (layer?.meta?.shape === 'cone') {
     const coneTilt = Number(layer?.meta?.coneTilt)
     const rollFromCirc = Number.isFinite(coneTilt) ? coneTilt : (Math.PI / 4)
-    const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
+    const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType, layer?.meta)
     nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
     return { segments: segs, nextCurrentNodes, parentToChildren }
   }
-  const effTiltScale = dynamicTiltScaleForLayer(layer)
-  let rollFromCirc = computeRollFromCircumference(thisCirc, Math.max(thisCirc, Number(maxCircumference) || thisCirc)) * effTiltScale
-  try {
-    const { latitude } = computeRingRollAngleFromCenter(ringCenterV, sphereCenterV, rNext, upV)
-    const mod = 0.5 + 0.5 * Math.abs(Math.sin(2 * latitude))
-    rollFromCirc *= mod
-  } catch (_) {}
-  // Legacy path has no polyline; skip stretch mod here
-  const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollFromCirc, hemiSign, stitchType)
+  // Use pre-calculated tilt angle from sphere tilt pipeline
+  const nextCurrentNodes = buildNodes(evenPts, [ringCenterV.x, ringCenterV.y, ringCenterV.z], [sphereCenterV.x, sphereCenterV.y, sphereCenterV.z], upV, rNext, rollAngle, hemiSign, stitchType, layer?.meta)
   nextCurrentNodes.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
 
   return { segments: segs, nextCurrentNodes, parentToChildren }

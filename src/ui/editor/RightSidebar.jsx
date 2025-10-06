@@ -85,7 +85,6 @@ const RightSidebar = () => {
             <span className="property-label">Priority</span>
             <div style={{ display:'inline-flex', gap:6 }}>
               <button className={`btn ${selectedObject.priorityOverride==='auto'?'btn-primary':''}`} onClick={() => setPriorityOverride(selectedObject.id,'auto')}>Auto</button>
-              <button className={`btn ${selectedObject.priorityOverride==='strong'?'btn-primary':''}`} onClick={() => setPriorityOverride(selectedObject.id,'strong')}>Strong</button>
               <button className={`btn ${selectedObject.priorityOverride==='weak'?'btn-primary':''}`} onClick={() => setPriorityOverride(selectedObject.id,'weak')}>Weak</button>
             </div>
           </div>

@@ -35,6 +35,8 @@ export const useLayerlineStore = create((set, get) => ({
     renderMaxLayers: 400, // view-only cap; export still uses full data
     showMeasurements: false,
     measureEvery: 1,
+    measurementAzimuthDeg: 0,
+    showLayerOrder: false,
     // Oval detection
     ovalThreshold: 0.75,
     chainThreshold: 1.6,

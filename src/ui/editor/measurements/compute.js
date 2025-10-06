@@ -1,15 +1,16 @@
 import * as THREE from 'three'
-import { labelLayersFromPoles } from '../../../domain/layerlines/pipeline/index.js'
 import { buildBaselineSegments } from './pipes/baseline'
 import { filterMeasurableLayers } from './filters/layers'
+import { computePerObjectLayerOrder } from './utils/layerOrdering.js'
 
 // Build measurement segments from layers and markers, per object.
 // Each segment: { objectId, label, value, a:[x,y,z], b:[x,y,z] }
 export function computeMeasurementSegments(layers, markers, measureEvery = 1, opts = {}) {
-  // Ensure layers are labeled from start→end using shared pipeline logic
-  const labeled = labelLayersFromPoles(layers || [], markers || {})
+  // Build a shared per-object ordering consistent with the overlay
+  const { idxMap } = computePerObjectLayerOrder(layers || [], markers || {})
   const perObject = new Map()
-  for (const layer of labeled.layers) {
+  for (const layer of (layers || [])) {
+    if (!idxMap.has(layer)) continue // skip helpers/non-renderable
     const id = layer.objectId ?? 'unknown'
     if (!perObject.has(id)) perObject.set(id, [])
     perObject.get(id).push(layer)
@@ -41,7 +42,13 @@ export function computeMeasurementSegments(layers, markers, measureEvery = 1, op
 
   const segments = []
   perObject.forEach((arr, id) => {
-    const filtered = filterMeasurableLayers(arr, { allowLooseFirst: true, forceIncludeIndex: 0 })
+    // Respect per-object ordering from shared overlay logic
+    const sorted = [...arr].sort((a, b) => (idxMap.get(a) ?? 0) - (idxMap.get(b) ?? 0))
+    // Include ALL layers by default (including base layers) to match the index overlay
+    const includeAll = (opts?.includeAllLayers !== undefined) ? !!opts.includeAllLayers : true
+    const usable = includeAll
+      ? sorted
+      : filterMeasurableLayers(sorted, { allowLooseFirst: true, forceIncludeIndex: 0 })
     // Baseline: always use the simple baseline algorithm regardless of type
     // Rebuild poles ordered by role: [start, end]
     const arrPoles = poleByObject.get(id) || []
@@ -49,11 +56,11 @@ export function computeMeasurementSegments(layers, markers, measureEvery = 1, op
     const endPos = (arrPoles.find(e => e.role === 'end')?.pos) || (arrPoles[1]?.pos)
     const poles = [startPos, endPos].filter(Boolean)
     const axis = axisByObject.get(id) || (poles.length === 2 ? vec(poles[1]).sub(vec(poles[0])).normalize() : new THREE.Vector3(0,1,0))
-    const type = filtered[0]?.objectType || 'unknown'
+    const type = usable[0]?.objectType || 'unknown'
     // Auto metric: project along axis for non-spheres; use true 3D for spheres
     const autoProject = (opts?.projectAlongAxis !== undefined) ? opts.projectAlongAxis : (type !== 'sphere')
-    const localOpts = { ...opts, projectAlongAxis: autoProject, forceNearestChain: true }
-    const segs = buildBaselineSegments(filtered, poles, axis, measureEvery, localOpts)
+    const localOpts = { ...opts, projectAlongAxis: autoProject, orderedAlready: true, strictAzimuth: true, idxMap }
+    const segs = buildBaselineSegments(usable, poles, axis, measureEvery, localOpts)
     for (const s of segs) segments.push(s)
   })
 

@@ -86,10 +86,11 @@ const useSceneStore = create((set, get) => ({
     get().updateObject(id, { rotation: [...rotation] })
   },
 
-  // Priority override controls intersection strength:
-  // 'auto' (default): use mass-based ranking; 'strong': always strongest; 'weak': always weakest
+  // Priority override:
+  // 'auto' (default): automatic priorities (bigger object tends to win)
+  // 'weak': invert rule for this object in pairwise comparisons (smaller object wins)
   setPriorityOverride: (id, mode = 'auto') => {
-    const valid = mode === 'auto' || mode === 'strong' || mode === 'weak'
+    const valid = mode === 'auto' || mode === 'weak'
     if (!valid) return
     get().updateObject(id, { priorityOverride: mode })
   },

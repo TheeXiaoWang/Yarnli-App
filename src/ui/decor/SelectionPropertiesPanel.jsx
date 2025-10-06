@@ -2,16 +2,17 @@ import React from 'react'
 import { useDecorStore } from '../../app/stores/decorStore'
 
 export default function SelectionPropertiesPanel() {
-  const { 
-    selectedEyeId, 
-    selectedYarnId, 
-    selectedFeltId, 
-    eyes, 
-    yarns, 
+  const {
+    selectedEyeId,
+    selectedYarnId,
+    selectedFeltId,
+    eyes,
+    yarns,
     feltPieces,
     updateYarnCurvature,
     updateYarnColor,
     updateEyeRadius,
+    updateFeltPiece,
     getItemName,
     clearAllSelections,
     setFeltColor
@@ -335,16 +336,16 @@ export default function SelectionPropertiesPanel() {
 
           {/* Color Control */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ 
-              fontSize: 12, 
-              color: '#ccc', 
+            <div style={{
+              fontSize: 12,
+              color: '#ccc',
               marginBottom: 6,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
               <span>Color</span>
-              <span style={{ 
+              <span style={{
                 background: 'rgba(255,255,255,0.1)',
                 padding: '2px 6px',
                 borderRadius: 4,
@@ -354,14 +355,14 @@ export default function SelectionPropertiesPanel() {
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input 
-                type="color" 
+              <input
+                type="color"
                 value={selectedFelt.color}
-                onChange={(e) => setFeltColor(e.target.value)} 
-                style={{ 
-                  width: 40, 
-                  height: 30, 
-                  border: '1px solid rgba(255,255,255,0.2)', 
+                onChange={(e) => updateFeltPiece(selectedFelt.id, { color: e.target.value })}
+                style={{
+                  width: 40,
+                  height: 30,
+                  border: '1px solid rgba(255,255,255,0.2)',
                   borderRadius: 6,
                   background: 'transparent',
                   cursor: 'pointer'
@@ -377,33 +378,121 @@ export default function SelectionPropertiesPanel() {
             </div>
           </div>
 
-          {/* Position and Scale Info */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#ccc', marginBottom: 4 }}>Position</div>
-            <div style={{ 
-              fontSize: 11, 
-              color: '#aaa',
-              background: 'rgba(255,255,255,0.05)',
-              padding: '6px 8px',
-              borderRadius: 4,
-              fontFamily: 'monospace',
-              marginBottom: 8
+          {/* Scale Control */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{
+              fontSize: 12,
+              color: '#ccc',
+              marginBottom: 6,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
             }}>
-              [{selectedFelt.position.map(c => c.toFixed(2)).join(', ')}]
+              <span>Scale</span>
+              <span style={{
+                background: 'rgba(255,255,255,0.1)',
+                padding: '2px 6px',
+                borderRadius: 4,
+                fontSize: 10
+              }}>
+                {(selectedFelt.scale || 1.0).toFixed(1)}x
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0.1}
+              max={10.0}
+              step={0.1}
+              value={selectedFelt.scale || 1.0}
+              onChange={(e) => updateFeltPiece(selectedFelt.id, { scale: Number(e.target.value) })}
+              style={{
+                width: '100%',
+                height: 6,
+                borderRadius: 3,
+                background: 'rgba(255,255,255,0.1)',
+                outline: 'none',
+                appearance: 'none',
+                cursor: 'pointer'
+              }}
+            />
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: 9,
+              color: '#666',
+              marginTop: 4
+            }}>
+              <span>0.1x</span>
+              <span>1.0x</span>
+              <span>5.0x</span>
+              <span>10.0x</span>
             </div>
           </div>
 
+          {/* Rotation Control */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{
+              fontSize: 12,
+              color: '#ccc',
+              marginBottom: 6,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <span>Rotation</span>
+              <span style={{
+                background: 'rgba(255,255,255,0.1)',
+                padding: '2px 6px',
+                borderRadius: 4,
+                fontSize: 10
+              }}>
+                {(selectedFelt.rotation || 0).toFixed(0)}°
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={360}
+              step={5}
+              value={selectedFelt.rotation || 0}
+              onChange={(e) => updateFeltPiece(selectedFelt.id, { rotation: Number(e.target.value) })}
+              style={{
+                width: '100%',
+                height: 6,
+                borderRadius: 3,
+                background: 'rgba(255,255,255,0.1)',
+                outline: 'none',
+                appearance: 'none',
+                cursor: 'pointer'
+              }}
+            />
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: 9,
+              color: '#666',
+              marginTop: 4
+            }}>
+              <span>0°</span>
+              <span>90°</span>
+              <span>180°</span>
+              <span>270°</span>
+              <span>360°</span>
+            </div>
+          </div>
+
+          {/* Position Info */}
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#ccc', marginBottom: 4 }}>Scale</div>
-            <div style={{ 
-              fontSize: 11, 
+            <div style={{ fontSize: 12, color: '#ccc', marginBottom: 4 }}>Position</div>
+            <div style={{
+              fontSize: 11,
               color: '#aaa',
               background: 'rgba(255,255,255,0.05)',
               padding: '6px 8px',
               borderRadius: 4,
               fontFamily: 'monospace'
             }}>
-              {selectedFelt.scale.toFixed(2)}
+              [{selectedFelt.position.map(c => c.toFixed(2)).join(', ')}]
             </div>
           </div>
         </div>

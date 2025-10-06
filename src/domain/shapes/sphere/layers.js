@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { buildObjectMatrix, AXIS, getWidestAxis } from '../../layerlines/common'
 import { computeStitchDimensions } from '../../layerlines/stitches'
+import { desiredFirstCircumference } from '../../layerlines/firstGap'
+import { STITCH_TYPES } from '../../../constants/stitchTypes'
 
 function sliceSphereAnalytic(matrixWorld, planeWorld, segments = 128, outwardBias = 0) {
   const inv = new THREE.Matrix4().copy(matrixWorld).invert()
@@ -182,17 +184,66 @@ export function generateSphereLayers(object, settings, maxLayers) {
     return Math.sqrt((aAxis * s) * (aAxis * s) + (aEqu * c) * (aEqu * c))
   }
 
+  // Calculate desired first layer circumference based on magic ring setting
+  const desiredCirc = desiredFirstCircumference(settings)
+
+  // Solve for the theta angle that produces the desired circumference
+  // For a sphere, circumference at angle theta from pole = 2π * r * sin(theta)
+  // where r is the effective radius in the equatorial plane
+  const targetRadius = desiredCirc / (2 * Math.PI)
+  const targetSinTheta = Math.min(1, targetRadius / aEqu) // sin(theta) = targetRadius / equatorialRadius
+  const firstTheta = Math.asin(Math.max(0, Math.min(1, targetSinTheta)))
+
+  // Calculate the arc length to this first layer
+  const firstArc = integrateArcLength(firstTheta, metric, Math.min(8192, Math.max(512, 1000)))
+
+  console.log('[Sphere] First layer adjustment:', {
+    'desiredCirc': desiredCirc.toFixed(4),
+    'targetRadius': targetRadius.toFixed(4),
+    'aEqu (equatorial radius)': aEqu.toFixed(4),
+    'firstTheta (radians)': firstTheta.toFixed(4),
+    'firstTheta (degrees)': (firstTheta * 180 / Math.PI).toFixed(2),
+    'firstArc': firstArc.toFixed(4),
+    'step': step.toFixed(4),
+  })
+
   const layers = []
   // Target arc lengths: k * step up to total arc at pi
   const stepsEstimate = Math.max(1, Math.ceil((aAxis + aEqu) * Math.PI / Math.max(step, 1e-6)))
   const nBase = Math.min(8192, Math.max(512, stepsEstimate * 2))
   const totalArc = integrateArcLength(Math.PI, metric, nBase)
   const tol = Math.max(step * 0.02, 1e-5)
-  let k = 1
-  let prevTheta = 0
+
+  let prevTheta = firstTheta
   let localIdx = 0
-  while (k * step < totalArc - tol && k <= maxLayers) {
-    const target = k * step
+  let currentArc = firstArc
+
+  // Add the first layer at the calculated position
+  if (firstTheta > 0) {
+    const cosT = Math.cos(firstTheta)
+    const rings = sliceSphereLocal(matrix, poleLocal, cosT)
+    const tSort = dir.dot(center) + rDir * cosT
+    if (rings.length) {
+      layers.push({
+        y: tSort,
+        polylines: rings,
+        meta: { axisRatio, isFirstLayer: true, aAxis, aEqu },
+        debugSource: { file: 'src/layerlines/sphere.js', fn: 'generateSphereLayers', kind: 'sphere-ring-first', localIndex: localIdx }
+      })
+      localIdx++
+
+      console.log('[Sphere] Layer 0 (first layer):', {
+        'layerIndex': 0,
+        'arcLength': currentArc.toFixed(4),
+        'theta (degrees)': (firstTheta * 180 / Math.PI).toFixed(2),
+      })
+    }
+  }
+
+  // Continue with remaining layers, starting from firstArc + step
+  currentArc += step
+  while (currentArc < totalArc - tol && localIdx < maxLayers) {
+    const target = currentArc
     // Newton-Bisection hybrid to solve arc(theta)=target
     let lo = prevTheta, hi = Math.PI
     let theta = prevTheta + step / Math.max(metric(prevTheta > 0 ? prevTheta : 1e-4), 1e-6)
@@ -215,9 +266,24 @@ export function generateSphereLayers(object, settings, maxLayers) {
     const rings = sliceSphereLocal(matrix, poleLocal, cosT)
     // y used for sorting only; spacing is geodesic and independent of axis scale
     const tSort = dir.dot(center) + rDir * cosT
-    if (rings.length) layers.push({ y: tSort, polylines: rings, meta: { axisRatio }, debugSource: { file: 'src/layerlines/sphere.js', fn: 'generateSphereLayers', kind: 'sphere-ring', localIndex: localIdx } })
+    if (rings.length) {
+      layers.push({ y: tSort, polylines: rings, meta: { axisRatio, aAxis, aEqu }, debugSource: { file: 'src/layerlines/sphere.js', fn: 'generateSphereLayers', kind: 'sphere-ring', localIndex: localIdx } })
+
+      // Debug logging for layer spacing verification
+      if (localIdx < 5 || localIdx === layers.length - 1) {
+        const spacingFromPrev = currentArc - (localIdx === 1 ? firstArc : (currentArc - step))
+        console.log(`[Sphere] Layer ${localIdx}:`, {
+          'layerIndex': localIdx,
+          'targetArc': currentArc.toFixed(4),
+          'actualArc': integrateArcLength(theta, metric, nBase).toFixed(4),
+          'theta (degrees)': (theta * 180 / Math.PI).toFixed(2),
+          'spacingFromPrev': spacingFromPrev.toFixed(4),
+          'expectedSpacing': step.toFixed(4),
+        })
+      }
+    }
     prevTheta = theta
-    k++
+    currentArc += step
     localIdx++
   }
 
@@ -259,7 +325,7 @@ export function generateSphereLayers(object, settings, maxLayers) {
           const ringsNew = sliceSphereLocal(matrix, poleLocal, cosTNew)
           const tSortNew = dir.dot(center) + rDir * cosTNew
           if (ringsNew && ringsNew.length) {
-            layers.push({ y: tSortNew, polylines: ringsNew, meta: { axisRatio }, debugSource: { file: 'src/layerlines/sphere.js', fn: 'generateSphereLayers', kind: 'sphere-ring', localIndex: layers.length } })
+            layers.push({ y: tSortNew, polylines: ringsNew, meta: { axisRatio, aAxis, aEqu }, debugSource: { file: 'src/layerlines/sphere.js', fn: 'generateSphereLayers', kind: 'sphere-ring', localIndex: layers.length } })
           }
         }
       }

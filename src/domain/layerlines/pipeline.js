@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { computeSceneBBox, computeObjectBBox, getWorldCenter, aabbsIntersect } from './common'
+import { computeSceneBBox, computeObjectBBox, getWorldCenter } from './common'
 import { detectPrimaryAxis } from '../nodes/utils/orientation/detectPrimaryAxis.js'
 import { Generators, Intersections, enforceTailSpacing, detectOvalStart, determinePoleRoles } from './pipeline/index.js'
 import { computeSliceDirForObject } from './pipeline/perObject.js'
@@ -7,10 +7,12 @@ import { annotateLayersWithKeys } from './pipeline/annotateLayers.js'
 import { isOvalByAxes } from './pipeline/ovalGate.js'
 import { computeStitchDimensions } from './stitches'
 import { polylineLength3D } from './circumference'
+import { UnifiedLayerGenerator } from './pipeline/unifiedLayerGenerator.js'
+import { computeIntersectionPlan, approximateTotalVolume } from './intersections/plan.js'
 
 export function generateLayerLines(objects, settings) {
   const bbox = computeSceneBBox(objects)
-  const { maxLayers = 200000, previewLayers = 100000 } = settings
+  const { maxLayers = 200000 } = settings
 
   // Derive dimensions from yarn size + stitch kind; fall back to legacy values
   const { width: derivedSpacing, height: derivedHeight } = computeStitchDimensions({
@@ -30,58 +32,9 @@ export function generateLayerLines(objects, settings) {
   const markers = { poles: [], ring0: [], boundaries: [], cutLoops: [] }
   let totalLineCount = 0
 
-  // Priority plan: larger object wins in overlaps; build ordered list, ranks, and cutters
+  // Priority plan (shape-agnostic): use intersections/plan to compute ordered list, ranks, and cutters
   const visible = objects.filter((o) => o.visible)
-
-  const approxVolume = (obj) => {
-    const sx = Math.abs(obj.scale?.[0] ?? 1)
-    const sy = Math.abs(obj.scale?.[1] ?? 1)
-    const sz = Math.abs(obj.scale?.[2] ?? 1)
-    const det = sx * sy * sz
-    if (obj.type === 'sphere') return (4 / 3) * Math.PI * det
-    if (obj.type === 'cone') return (2 / 3) * Math.PI * det
-    const bb = computeObjectBBox(obj)
-    if (bb) {
-      const dx = Math.max(0, bb.max[0] - bb.min[0])
-      const dy = Math.max(0, bb.max[1] - bb.min[1])
-      const dz = Math.max(0, bb.max[2] - bb.min[2])
-      return dx * dy * dz
-    }
-    return det
-  }
-
-  const priorities = new Map()
-  visible.forEach((o) => priorities.set(o.id, 0))
-
-  // score objects: for each overlapping pair, increment the larger one's score
-  for (let i = 0; i < visible.length; i++) {
-    for (let j = i + 1; j < visible.length; j++) {
-      const A = visible[i], B = visible[j]
-      const bbA = computeObjectBBox(A)
-      const bbB = computeObjectBBox(B)
-      if (!bbA || !bbB || !aabbsIntersect(bbA, bbB)) continue
-      const volA = approxVolume(A)
-      const volB = approxVolume(B)
-      if (volA >= volB) priorities.set(A.id, (priorities.get(A.id) || 0) + 1)
-      else priorities.set(B.id, (priorities.get(B.id) || 0) + 1)
-    }
-  }
-
-  const ordered = [...visible].sort((a, b) => (priorities.get(b.id) || 0) - (priorities.get(a.id) || 0))
-  const ranks = new Map(ordered.map((o, idx) => [o.id, idx]))
-
-  const cuttersMap = new Map()
-  for (let i = 0; i < ordered.length; i++) {
-    const obj = ordered[i]
-    const bbObj = computeObjectBBox(obj)
-    const cutters = []
-    for (let k = 0; k < i; k++) { // only stronger (lower rank) can cut
-      const cutter = ordered[k]
-      const bbCut = computeObjectBBox(cutter)
-      if (bbObj && bbCut && aabbsIntersect(bbObj, bbCut)) cutters.push(cutter)
-    }
-    cuttersMap.set(obj.id, cutters)
-  }
+  const { ordered, priorities, ranks, cuttersMap } = computeIntersectionPlan(visible)
 
   // Track masks of subtracted regions to emulate boolean-cut behavior
   const subtractionMasks = [] // array of { objectId, cutterId }
@@ -99,8 +52,16 @@ export function generateLayerLines(objects, settings) {
     if (obj.type === 'sphere') result = Generators.generateSphereLayers(obj, perCall, maxLayers)
     else if (obj.type === 'cone') result = Generators.generateConeLayers(obj, perCall, maxLayers)
     else if (obj.type === 'triangle') result = Generators.generateTriangleLayers(obj, perCall, maxLayers)
-    else if (obj.type === 'cylinder') result = Generators.generateCylinderLayers(obj, perCall, maxLayers)
-    else if (obj.type === 'capsule') result = Generators.generateCapsuleLayers(obj, perCall, maxLayers)
+    else if (obj.type === 'cylinder') {
+      // Use unified generator for cylinder
+      const generator = new UnifiedLayerGenerator(obj, perCall, maxLayers)
+      result = generator.generate()
+    }
+    else if (obj.type === 'capsule') {
+      // Use unified generator for capsule
+      const generator = new UnifiedLayerGenerator(obj, perCall, maxLayers)
+      result = generator.generate()
+    }
     else if (obj.type === 'pyramid') result = Generators.generatePyramidLayers(obj, perCall, maxLayers)
     else if (obj.type === 'torus') result = Generators.generateTorusLayers(obj, perCall, maxLayers)
 
@@ -276,7 +237,7 @@ export function generateLayerLines(objects, settings) {
     let remain = cap - allocations.reduce((a,b)=>a+b,0)
     for (let i = 0; i < allocations.length && remain > 0; i++) { allocations[i]++; remain-- }
     const out = []
-    entries.forEach(([id, arr], idx) => {
+    entries.forEach(([_, arr], idx) => {
       const k = allocations[idx]
       if (arr.length <= k) { out.push(...arr) }
       else {
@@ -311,13 +272,7 @@ export function generateLayerLines(objects, settings) {
       priorities: Object.fromEntries(priorities),
       ranks: Object.fromEntries(ranks),
       subtractionMasks,
-      volumes: Object.fromEntries(
-        visible.map(o => [
-          o.id,
-          (Math.abs(o.scale?.[0] || 1) * Math.abs(o.scale?.[1] || 1) * Math.abs(o.scale?.[2] || 1)) *
-            (o.type === 'sphere' ? (4 / 3) * Math.PI : o.type === 'cone' ? (2 / 3) * Math.PI : 1)
-        ])
-      )
+      volumes: Object.fromEntries(visible.map(o => [o.id, approximateTotalVolume(o)])),
     },
   }
 }

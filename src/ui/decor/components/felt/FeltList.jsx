@@ -15,6 +15,7 @@ const FeltList = ({ feltPieces, selectedFeltId, onSelectFelt, onDeleteFelt, sour
           position={felt.position}
           normal={felt.normal}
           scale={felt.scale}
+          rotation={felt.rotation || 0}
           sourceObject={sourceObject}
           orbitalDistance={orbitalDistance}
           selected={selectedFeltId === felt.id}

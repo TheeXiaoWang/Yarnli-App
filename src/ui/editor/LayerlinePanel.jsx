@@ -32,7 +32,14 @@ const LayerlinePanel = () => {
 
   const handleGenerateNodes = async () => {
     await generate(objects) // ensure we have up-to-date layers
-    await generateNodesFromLayerlines({ generated, settings })
+    // Get fresh settings from store to ensure we have the latest values
+    const freshSettings = useLayerlineStore.getState().settings
+    const freshGenerated = useLayerlineStore.getState().generated
+    console.log('[UI] Generating nodes with settings:', {
+      magicRingDefaultStitches: freshSettings.magicRingDefaultStitches,
+      yarnSizeLevel: freshSettings.yarnSizeLevel,
+    })
+    await generateNodesFromLayerlines({ generated: freshGenerated, settings: freshSettings })
   }
 
   return (
@@ -52,6 +59,24 @@ const LayerlinePanel = () => {
             )
           })}
         </Select>
+      </Row>
+
+      <Row label="Magic Ring Stitches">
+        <input
+          type="number"
+          min={3}
+          max={12}
+          step={1}
+          value={settings.magicRingDefaultStitches ?? 6}
+          onChange={(e) => setSettings({ magicRingDefaultStitches: parseInt(e.target.value, 10) })}
+          style={{ width: 60, background: '#2a2a2a', border: '1px solid #505050', color: '#fff', padding: '4px 6px', borderRadius: 4 }}
+        />
+        <span style={{ marginLeft: 8, color: '#aaa', fontSize: 12 }}>
+          (auto: {(() => {
+            const { nodes } = useNodeStore.getState()
+            return nodes?.meta?.stitchCount || '?'
+          })()})
+        </span>
       </Row>
 
       <Row label="Inc/Dec Factor">
@@ -265,7 +290,7 @@ const LayerlinePanel = () => {
             Intersection helpers (edge arcs/connectors)
           </label>
         </div>
-        
+
         <div className="property-item" style={{ marginTop: 8 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ minWidth: 120 }}>Min Fragment Ratio:</span>
@@ -333,6 +358,34 @@ const LayerlinePanel = () => {
           />
           <span style={{ marginLeft: 6, color: '#aaa' }}>rings</span>
         </div>
+        {settings.showMeasurements && (
+          <div className="property-item" style={{ marginTop: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+              <span style={{ minWidth: 120 }}>Measurement azimuth:</span>
+              <input
+                type="range"
+                min={0}
+                max={359}
+                step={1}
+                value={settings.measurementAzimuthDeg ?? 0}
+                onChange={(e) => setSettings({ measurementAzimuthDeg: parseInt(e.target.value || '0', 10) })}
+                style={{ flex: 1 }}
+              />
+              <span style={{ minWidth: 40, textAlign: 'right' }}>{settings.measurementAzimuthDeg ?? 0}°</span>
+            </label>
+          </div>
+        )}
+          <div className="property-item" style={{ marginTop: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={Boolean(settings.showLayerOrder)}
+                onChange={(e) => setSettings({ showLayerOrder: e.target.checked })}
+              />
+              Show layer order indices
+            </label>
+          </div>
+
       </div>
     </div>
   )

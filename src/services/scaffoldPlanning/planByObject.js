@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { planScaffoldChain } from './planScaffoldChain'
+import { computePerObjectLayerOrder } from '../../ui/editor/measurements/utils/layerOrdering.js'
 
 // Plan scaffolding separately per objectId and return both per-object and flattened results
 export function planScaffoldByObject({
@@ -42,6 +43,9 @@ export function planScaffoldByObject({
   nGlobal.normalize()
   const axisOriginGlobal = new THREE.Vector3(centerV.x, centerV.y, centerV.z).sub(nGlobal.clone().multiplyScalar(startKey))
 
+  // Shared per-object ordering map so scaffolding matches overlay and measurements
+  const { idxMap } = computePerObjectLayerOrder(layers || [], markers || {})
+
   for (const [objectId, arr] of byObject.entries()) {
     // Build keys
     // We'll determine a per-object axis and origin
@@ -68,59 +72,27 @@ export function planScaffoldByObject({
     // Fallback origin at startPos if present; else use global axis origin
     let axisOrigin = startPos ? startPos.clone() : axisOriginGlobal.clone()
 
-    const layersWithKey = arr.map((l) => {
-      const poly = l?.polylines?.[0]
-      let mid = null
-      if (Array.isArray(poly) && poly.length > 0) mid = poly[Math.floor(poly.length / 2)]
-      const v = mid ? new THREE.Vector3(mid[0], mid[1], mid[2]) : new THREE.Vector3(0, 0, 0)
-      const key = nObj.dot(v.clone().sub(axisOrigin))
-      return { layer: l, __key: key }
-    })
-    // Sort layers by closeness to global start key; will be used for fallback anchor and direction
-    const byCloseness = layersWithKey
-      .filter((e) => Number.isFinite(e.__key))
-      .sort((a, b) => Math.abs(a.__key - startKey) - Math.abs(b.__key - startKey))
+    // Use shared per-object ordering so scaffolding matches overlay/measurements
+    const layersOrdered = arr.filter((l) => idxMap.has(l)).sort((a, b) => (idxMap.get(a) ?? 0) - (idxMap.get(b) ?? 0))
+    if (layersOrdered.length === 0) continue
+
+    // Choose start anchor: prefer explicit start pole; otherwise first ordered layer midpoint
     if (!startPos) {
-      const e0 = byCloseness[0]
-      if (e0) {
-        const poly0 = e0.layer?.polylines?.[0]
-        const mid0 = Array.isArray(poly0) && poly0.length > 0 ? poly0[Math.floor(poly0.length / 2)] : null
-        if (mid0) startPos = new THREE.Vector3(mid0[0], mid0[1], mid0[2])
-      }
+      const first = layersOrdered[0]
+      const poly0 = first?.polylines?.[0]
+      const mid0 = Array.isArray(poly0) && poly0.length > 0 ? poly0[Math.floor(poly0.length / 2)] : null
+      if (mid0) startPos = new THREE.Vector3(mid0[0], mid0[1], mid0[2])
     }
 
-    // Compute per-object startKey from chosen anchor
+    // Per-object startKey derived from chosen anchor if needed
     let startKeyObj = 0
     if (!startPos) {
-      // No explicit start pole; measure from current centerV to origin
       startKeyObj = nObj.dot(new THREE.Vector3(centerV.x, centerV.y, centerV.z).sub(axisOrigin))
     }
-    // sign > 0 means we go toward increasing key; < 0 toward decreasing key
-    let dirSign = 1
-    if (startPos && endPos) {
-      const signVal = nObj.dot(endPos.clone().sub(startPos))
-      dirSign = signVal >= 0 ? 1 : -1
-    } else {
-      const nearest = byCloseness[0]
-      if (nearest) dirSign = (nearest.__key - startKeyObj) >= 0 ? 1 : -1
-    }
-    // Build ordered list: take the closest 1–2 layers first (regardless of side),
-    // then continue strictly forward toward the end pole. This ensures early rings
-    // right above the start pole are not ignored at small yarn sizes.
-    const finite = layersWithKey.filter((e) => Number.isFinite(e.__key))
-    const nearSorted = finite.slice().sort((a, b) => Math.abs(a.__key - startKeyObj) - Math.abs(b.__key - startKeyObj))
-    const head = []
-    const used = new Set()
-    for (let i = 0; i < nearSorted.length && head.length < 2; i++) {
-      const e = nearSorted[i]
-      head.push(e)
-      used.add(e)
-    }
-    const forwardRest = finite
-      .filter((e) => !used.has(e) && (e.__key - startKeyObj) * dirSign > epsKey)
-      .sort((a, b) => (a.__key - b.__key) * dirSign)
-    const layersToProcess = head.concat(forwardRest).map((e) => e.layer)
-    if (layersToProcess.length === 0) continue
+
+    const layersToProcess = layersOrdered
+    // proceed with ordered layers
+
     // Seed from the object's start pole if available; otherwise nearest layer midpoint.
     let seedRing = (currentNodes || [])
     let centerVObj = centerV
@@ -161,6 +133,7 @@ export function planScaffoldByObject({
       decMode,
       spacingMode,
       // tiltScale parameter retained for compatibility but ignored (dynamic per-layer)
+      idxMap, // shared ordering to preserve overlay sequence
     })
     // Inject anchor into each build step by passing through store-level distributeNextNodes wrapper
     // Not altering planScaffoldChain; it forwards the args into buildStep which accepts aRef

@@ -200,9 +200,9 @@ const SceneObject = ({ object, isSelected }) => {
       case 'capsule':
         return (
           <mesh {...commonProps}>
-            <capsuleGeometry args={[0.5, 1, 4, 8]} />
-            <meshStandardMaterial 
-              color={object.color} 
+            <capsuleGeometry args={[0.5, 1, 24, 48]} />
+            <meshStandardMaterial
+              color={object.color}
               transparent={true}
               opacity={isSelected ? 0.8 : 1}
             />
@@ -338,7 +338,7 @@ const SceneObject = ({ object, isSelected }) => {
             object.rotation[2] * (Math.PI / 180)
           ]}
         >
-          <capsuleGeometry args={[0.5, 1, 4, 8]} />
+          <capsuleGeometry args={[0.5, 1, 24, 48]} />
           <meshBasicMaterial 
             color="#00ff00" 
             transparent={true}

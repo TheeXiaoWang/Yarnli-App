@@ -14,6 +14,16 @@ export function approximateTotalVolume(obj) {
     const base = (2 / 3) * Math.PI // unit cone r=1, h=2
     return base * scaleDet
   }
+  if (obj.type === 'cylinder') {
+    const base = 2 * Math.PI // unit cylinder r=1, h=2 -> V = π r^2 h = 2π
+    return base * scaleDet
+  }
+  if (obj.type === 'capsule') {
+    // Unit capsule in codebase: radius=0.5, cylinder length=1
+    // V = π r^2 h + (4/3)π r^3 = π*(0.25)*1 + (4/3)π*(0.125) = (5/12)π
+    const base = (5 / 12) * Math.PI
+    return base * scaleDet
+  }
   // fallback to AABB volume
   const bb = computeObjectBBox(obj)
   if (bb) {
@@ -38,15 +48,18 @@ export function computeIntersectionPlan(objects) {
       const A = visible[i], B = visible[j]
       const bbA = bboxes[i], bbB = bboxes[j]
       if (!bbA || !bbB || !aabbsIntersect(bbA, bbB)) continue
-      // Honor explicit overrides first
-      if (A.priorityOverride === 'strong' || B.priorityOverride === 'weak') {
-        priorities.set(A.id, (priorities.get(A.id) || 0) + 1)
+
+      // If either side is set to 'weak', invert the usual rule: smaller total volume wins
+      const invert = (A.priorityOverride === 'weak') || (B.priorityOverride === 'weak')
+      if (invert) {
+        const volA = approximateTotalVolume(A)
+        const volB = approximateTotalVolume(B)
+        const winner = (volA <= volB) ? A : B
+        priorities.set(winner.id, (priorities.get(winner.id) || 0) + 1)
         continue
       }
-      if (B.priorityOverride === 'strong' || A.priorityOverride === 'weak') {
-        priorities.set(B.id, (priorities.get(B.id) || 0) + 1)
-        continue
-      }
+
+      // AUTO: use existing mass-based rule with volume fallback (bigger usually wins)
       const massA = estimateNonOverlappingVolume(A, B, 8000)
       const massB = estimateNonOverlappingVolume(B, A, 8000)
       const eps = 1e-6

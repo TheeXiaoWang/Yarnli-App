@@ -98,6 +98,17 @@ export function computeMagicRingNodes({
     const effectiveNodeWidth = gaugeW * factor
     const computedS0 = Math.max(3, Math.round(ringCircumference / effectiveNodeWidth))
     S0 = Math.max(3, Math.round(overrideStitchCount ?? computedS0))
+
+    // Debug logging
+    if (debugLogs) {
+      console.log('[MR-Nodes] Stitch count override logic:', {
+        'overrideStitchCount (from settings)': overrideStitchCount,
+        'computedS0 (from circumference)': computedS0,
+        'S0 (final value)': S0,
+        'ringCircumference': ringCircumference.toFixed(4),
+        'effectiveNodeWidth': effectiveNodeWidth.toFixed(4),
+      })
+    }
     
     // Recalculate the actual radius from the ring points for accurate positioning
     let rRing = 0

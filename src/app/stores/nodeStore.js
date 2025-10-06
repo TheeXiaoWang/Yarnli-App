@@ -12,6 +12,7 @@ import { STITCH_TYPES } from '../../constants/stitchTypes'
 import { intersectWithPlane, nearestPointOnPolyline } from '../../ui/editor/measurements/utils'
 import { estimateR0FromRing0, averageRadiusFromPolyline, sampleRadiusAtY, buildScaffoldSegmentsToLayer, snapOnLayerByTheta, monotonicBuckets, enforceStepContinuity, normalizeAngle, computeOrderedAngles, angleSpan, filterInterLayerOnly, alignRingByAzimuth } from '../../domain/nodes/utils'
 import { findLayerBelow, findLayerAtLeastBelow, findImmediateLayerBelow, pickRingClosestToPoint, pickNextRingByDistance, getFirstLayerRing, deriveStartAndNormal } from '../../domain/layerlines/layerUtils'
+import { computeTargetSpacing } from '../../services/nodePlanning/dynamicSpacing'
 
 export const useNodeStore = create((set, get) => ({
   nodes: null,
@@ -126,6 +127,16 @@ export const useNodeStore = create((set, get) => ({
       const forcedS = Number.isFinite(settings?.magicRingDefaultStitches)
         ? Math.max(3, Math.round(settings.magicRingDefaultStitches))
         : (plannedS > 0 ? plannedS : 6)
+
+      // Debug logging to trace magic ring stitch count
+      console.log('[MagicRing] Stitch count calculation:', {
+        'settings.magicRingDefaultStitches': settings?.magicRingDefaultStitches,
+        'isFinite': Number.isFinite(settings?.magicRingDefaultStitches),
+        'plannedS (from circumference)': plannedS,
+        'forcedS (final value)': forcedS,
+        'plan.S0': plan?.S0,
+      })
+
       mrCountResult = {
         ...mrCountResult,
         magicRing: {
@@ -213,29 +224,20 @@ export const useNodeStore = create((set, get) => ({
         const spacingMode = settings?.planSpacingMode || 'even'
         const incMode = settings?.planIncreaseMode || spacingMode
         const decMode = settings?.planDecreaseMode || spacingMode
-        const targetSpacing = Math.max(1e-6, actualStitchWidth * effectiveTightenFactor)
+
+        // NEW: Use dynamic spacing logic that maintains edge-to-edge gaps
+        // This automatically compensates for changes in widthMul
+        const spacingResult = computeTargetSpacing({
+          yarnSizeLevel: settings?.yarnSizeLevel ?? 4,
+          stitchType: stitchType,
+          tightenFactor: effectiveTightenFactor,
+        })
+        const targetSpacing = Math.max(1e-6, spacingResult.centerSpacing)
 
         // Use centralized scaffold pipeline path below
 
-        // Build ordered list of layers using axis projection (not world-Y)
-        const layersWithKey = (generated.layers || []).map((l) => {
-          const poly = l?.polylines?.[0]
-          let mid = null
-          if (Array.isArray(poly) && poly.length > 0) mid = poly[Math.floor(poly.length / 2)]
-          const v = mid ? new THREE.Vector3(mid[0], mid[1], mid[2]) : new THREE.Vector3(0, 0, 0)
-          const key = axisDir.dot(v.clone().sub(axisOrigin))
-          return { layer: l, __key: key }
-        })
-        const epsKey = 1e-6
-        const byCloseness = layersWithKey
-          .filter((e) => Number.isFinite(e.__key))
-          .sort((a, b) => Math.abs(a.__key - startKey) - Math.abs(b.__key - startKey))
-        const layersToProcess = []
-        for (let i = 0; i < byCloseness.length; i++) {
-          const e = byCloseness[i]
-          const isFirst = i === 0
-          if (isFirst || Math.abs(e.__key - startKey) > epsKey) layersToProcess.push(e.layer)
-        }
+        // Use shared per-object ordering inside planScaffoldByObject; do not pre-filter here
+        const layersToProcess = generated.layers || []
 
         // Initialize with FIRST LAYER nodes (endpoints of MR scaffold) to avoid duplicating MR->Layer0 step
         // Start from a single start-pole anchor; transition planner will create Layer0 ring

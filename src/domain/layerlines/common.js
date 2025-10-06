@@ -32,7 +32,8 @@ export function createGeometryForType(type) {
     case 'cylinder':
       return new THREE.CylinderGeometry(1, 1, 2, 48)
     case 'capsule':
-      return new THREE.CapsuleGeometry(0.5, 1, 4, 8)
+      // Match sphere smoothness: higher cap and radial segments
+      return new THREE.CapsuleGeometry(0.5, 1, 24, 48)
     case 'pyramid':
       return new THREE.ConeGeometry(1, 2, 4)
     case 'torus':
@@ -228,15 +229,36 @@ export function isPointInsideObject(worldPoint, object) {
   const p = (worldPoint && typeof worldPoint.x === 'number')
     ? new THREE.Vector3(worldPoint.x, worldPoint.y, worldPoint.z).applyMatrix4(inv)
     : worldPoint.clone().applyMatrix4(inv)
+
+  // Canonical shapes in local space:
+  // - sphere: radius 1 centered at origin
+  // - cone: height 2 along Y, base radius 1 at y=-1, apex at y=+1
+  // - cylinder: radius 1, height 2 along Y (y in [-1, +1])
+  // - capsule: cylinder radius 0.5 for |y|<=0.5, hemispherical caps to |y|<=1
   if (object.type === 'sphere') {
     return p.lengthSq() <= 1.0 + EPS
   }
   if (object.type === 'cone') {
-    // Cone with height 2 along Y, base radius 1 at y=-1, apex at y=+1
     if (p.y < -1 - EPS || p.y > 1 + EPS) return false
     const rAtY = (1 - p.y) / 2 // linear from 1 at y=-1 to 0 at y=+1
     const radial = Math.sqrt(p.x * p.x + p.z * p.z)
     return radial <= rAtY + EPS
+  }
+  if (object.type === 'cylinder') {
+    if (p.y < -1 - EPS || p.y > 1 + EPS) return false
+    const radial = Math.hypot(p.x, p.z)
+    return radial <= 1 + EPS
+  }
+  if (object.type === 'capsule') {
+    const ay = Math.abs(p.y)
+    if (ay > 1 + EPS) return false
+    const radial = Math.hypot(p.x, p.z)
+    const rCap = 0.5
+    if (ay <= 0.5 + EPS) {
+      return radial <= rCap + EPS
+    }
+    const dy = ay - 0.5
+    return (radial * radial + dy * dy) <= rCap * rCap + EPS
   }
   return false
 }
@@ -250,6 +272,7 @@ export function isPointInsideObjectWithMargin(worldPoint, object, shrink = 0) {
     ? new THREE.Vector3(worldPoint.x, worldPoint.y, worldPoint.z).applyMatrix4(inv)
     : worldPoint.clone().applyMatrix4(inv)
   const margin = Math.max(0, shrink)
+
   if (object.type === 'sphere') {
     // unit sphere shrunk by margin: radius = 1 - margin
     const r = Math.max(0, 1 - margin)
@@ -262,6 +285,24 @@ export function isPointInsideObjectWithMargin(worldPoint, object, shrink = 0) {
     const radial = Math.sqrt(p.x * p.x + p.z * p.z)
     return radial <= rAtY + EPS
   }
+  if (object.type === 'cylinder') {
+    if (p.y < -1 - EPS || p.y > 1 + EPS) return false
+    const r = Math.max(0, 1 - margin)
+    const radial = Math.hypot(p.x, p.z)
+    return radial <= r + EPS
+  }
+  if (object.type === 'capsule') {
+    const ay = Math.abs(p.y)
+    if (ay > 1 + EPS) return false
+    const r = Math.max(0, 0.5 - margin)
+    const radial = Math.hypot(p.x, p.z)
+    if (ay <= 0.5 + EPS) {
+      return radial <= r + EPS
+    }
+    const dy = ay - 0.5
+    return (radial * radial + dy * dy) <= r * r + EPS
+  }
+  // Fallback to exact test without margin for other shapes
   return isPointInsideObject(worldPoint, object)
 }
 

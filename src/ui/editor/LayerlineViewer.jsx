@@ -5,6 +5,7 @@ import { useLayerlineStore } from '../../app/stores/layerlineStore.js'
 import { approximateTotalVolume } from '../../domain/layerlines/intersections.js'
 import MeasurementsOverlay from './MeasurementsOverlay'
 import { Pole, Ring0Overlay, RingLines, formatPoleLabel } from './LayerlineViewer/index.js'
+import { computePerObjectLayerOrder } from './measurements/utils/layerOrdering.js'
 
 
 const LayerlineViewer = ({ layers, color = '#00ffaa', markers, meta }) => {
@@ -107,6 +108,122 @@ const LayerlineViewer = ({ layers, color = '#00ffaa', markers, meta }) => {
     return map
   }, [layers])
 
+  // Shared layer ordering used by overlay and measurements
+  const perObjectOrder = useMemo(
+    () => computePerObjectLayerOrder(layers, markers),
+    [layers, markers]
+  )
+
+	  // Per-object order indices and colors for debugging
+	  const perObjectOrderLegacy = useMemo(() => {
+	    const isRenderable = (l) => !l.isConnector && !l.isLadder && !l.isTipChain && !l.isEdgeArc && !l.isOffset && !l.isIntersection && !l.isCutEdge
+	    const idxMap = new WeakMap()
+	    const colorMap = new Map()
+	    const groups = new Map()
+	    const hashColor = (id) => {
+	      const s = String(id ?? 'unknown')
+	      let h = 0
+	      for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360
+	      return `hsl(${h},70%,60%)`
+	    }
+	    // Gather poles by object
+	    const polesByObj = new Map()
+	    for (const p of (markers?.poles || [])) {
+	      const oid = p?.objectId ?? 'unknown'
+	      if (!polesByObj.has(oid)) polesByObj.set(oid, {})
+	      const pos = Array.isArray(p) ? p : p?.p
+	      if (p.role === 'start' && Array.isArray(pos)) polesByObj.get(oid).start = pos
+	      else if (p.role === 'end' && Array.isArray(pos)) polesByObj.get(oid).end = pos
+	    }
+	    // Group layers per object (skip flat base faces)
+	    for (const l of (layers || [])) {
+	      if (!isRenderable(l)) continue
+	      const oid = l.objectId ?? 'unknown'
+	      if (!groups.has(oid)) groups.set(oid, [])
+	      groups.get(oid).push(l)
+	      if (!colorMap.has(oid)) colorMap.set(oid, hashColor(oid))
+	    }
+	    // For each object, sort from start pole → end pole and assign indices
+	    groups.forEach((arr, oid) => {
+	      const poles = polesByObj.get(oid) || {}
+	      let n = null, origin = null
+	      if (Array.isArray(poles.start) && Array.isArray(poles.end)) {
+	        origin = new THREE.Vector3(poles.start[0], poles.start[1], poles.start[2])
+	        const endV = new THREE.Vector3(poles.end[0], poles.end[1], poles.end[2])
+	        n = endV.clone().sub(origin)
+	        if (n.lengthSq() > 1e-12) n.normalize(); else n = null
+	      }
+	      const keyFor = (l) => {
+	        try {
+	          if (n && origin) {
+	            const poly = l?.polylines?.[0]
+	            if (Array.isArray(poly) && poly.length > 0) {
+	              const m = poly[Math.floor(poly.length / 2)]
+	              if (Array.isArray(m)) {
+	                const v = new THREE.Vector3(m[0], m[1], m[2])
+	                return n.dot(v.clone().sub(origin))
+	              }
+	            }
+	          }
+	        } catch(_) {}
+	        return (l._keyAlongAxis != null) ? l._keyAlongAxis : (l.y ?? 0)
+	      }
+      // Compute keys and extreme planes for tie-breakers (include base faces)
+      const __keys = arr.map(a => (function(){
+        try {
+          if (n && origin) {
+            const poly = a?.polylines?.[0]
+            if (Array.isArray(poly) && poly.length > 0) {
+              const m = poly[Math.floor(poly.length / 2)]
+              if (Array.isArray(m)) {
+                const v = new THREE.Vector3(m[0], m[1], m[2])
+                return n.dot(v.clone().sub(origin))
+              }
+            }
+          }
+        } catch(_) {}
+        return (a._keyAlongAxis != null) ? a._keyAlongAxis : (a.y ?? 0)
+      })())
+      const __minKey = Math.min(...__keys)
+      const __maxKey = Math.max(...__keys)
+      const __eps = 1e-6
+      const __perimeter = (layer) => {
+        try {
+          const poly = layer?.polylines?.[0]
+          if (!Array.isArray(poly) || poly.length < 2) return 0
+          let sum = 0
+          for (let i = 0; i < poly.length - 1; i++) {
+            const ax = poly[i][0], ay = poly[i][1], az = poly[i][2]
+            const bx = poly[i + 1][0], by = poly[i + 1][1], bz = poly[i + 1][2]
+            const dx = ax - bx, dy = ay - by, dz = az - bz
+            sum += Math.sqrt(dx * dx + dy * dy + dz * dz)
+          }
+          return sum
+        } catch (_) { return 0 }
+      }
+
+	      arr.sort((a, b) => keyFor(a) - keyFor(b))
+      // Refined sort with extreme-plane tie-breakers to place base faces correctly
+      arr.sort((a, b) => {
+        const ka = keyFor(a)
+        const kb = keyFor(b)
+        const dk = ka - kb
+        if (Math.abs(dk) > __eps) return dk
+        const aOnMin = Math.abs(ka - __minKey) <= __eps
+        const bOnMin = Math.abs(kb - __minKey) <= __eps
+        const aOnMax = Math.abs(ka - __maxKey) <= __eps
+        const bOnMax = Math.abs(kb - __maxKey) <= __eps
+        if (aOnMin && bOnMin) return __perimeter(a) - __perimeter(b)
+        if (aOnMax && bOnMax) return __perimeter(b) - __perimeter(a)
+        return 0
+      })
+
+	      for (let i = 0; i < arr.length; i++) idxMap.set(arr[i], i)
+	    })
+	    return { idxMap, colorMap }
+	  }, [layers, markers])
+
+
   return (
     <group>
       {/* markers */}
@@ -133,6 +250,27 @@ const LayerlineViewer = ({ layers, color = '#00ffaa', markers, meta }) => {
 
       {/* lines */}
       <RingLines layers={linesAsV3} color={color} />
+
+	      {/* Layer order indices overlay */}
+	      {settings?.showLayerOrder && layers.map((l, i) => {
+	        const ref = l.polylines?.[0]?.[Math.floor((l.polylines?.[0]?.length||1)/2)]
+	        if (!ref) return null
+        const oid = l.objectId ?? 'unknown'
+        const localIdx = perObjectOrder.idxMap.get(l)
+        if (localIdx == null) return null
+        const tagColor = perObjectOrder.colorMap.get(oid) || '#89bbff'
+        const oidShort = String(oid).slice(-4)
+
+	        return (
+	          <Html key={`ord-${i}`} position={[ref[0], ref[1] + 0.02, ref[2]]} center style={{ pointerEvents: 'none' }}>
+	            <div style={{ background: 'rgba(0,0,0,0.6)', color: '#89bbff', padding: '2px 6px', borderRadius: 4, fontSize: 10, borderLeft: `3px solid ${tagColor}` }}>
+	              {localIdx}
+              <span style={{ marginLeft: 6, color: '#ccc' }}>({oidShort})</span>
+	            </div>
+	          </Html>
+	        )
+	      })}
+
       {settings?.intersectionHelpers && ladderLines.map((pts, i) => (
         <Line key={`lad-${i}`} points={pts} color={'#ff9e40'} lineWidth={1.5} transparent opacity={0.95} />
       ))}
@@ -164,7 +302,12 @@ const LayerlineViewer = ({ layers, color = '#00ffaa', markers, meta }) => {
       ))}
 
       {settings.showMeasurements && (
-        <MeasurementsOverlay layers={layers} markers={markers} measureEvery={settings.measureEvery} />
+        <MeasurementsOverlay
+          layers={layers}
+          markers={markers}
+          measureEvery={settings.measureEvery}
+          azimuthDeg={settings.measurementAzimuthDeg ?? 0}
+        />
       )}
     </group>
   )

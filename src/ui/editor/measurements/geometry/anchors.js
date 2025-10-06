@@ -20,6 +20,40 @@ export function nearestPointOnPolyline(layer, refPoint) {
   } catch (_) { return null }
 }
 
+// Select a point on the ring by absolute azimuth (full 0..360°), not by plane intersection.
+// Builds a stable local frame {u,v} perpendicular to axis and picks the vertex whose
+// projected angle is closest to the requested azimuth direction.
+export function anchorPointAtAzimuth(layer, axis, azimuthDir) {
+  try {
+    const poly = layer?.polylines?.[0]
+    if (!Array.isArray(poly) || poly.length === 0) return null
+    const ax = axis.clone ? axis.clone().normalize() : new THREE.Vector3(axis.x, axis.y, axis.z).normalize()
+    // Build basis in the cross-section plane
+    let u = azimuthDir.clone ? azimuthDir.clone() : new THREE.Vector3(azimuthDir.x, azimuthDir.y, azimuthDir.z)
+    // Remove any axial component and normalize
+    u = u.sub(ax.clone().multiplyScalar(u.dot(ax)))
+    if (u.lengthSq() < 1e-12) return null
+    u.normalize()
+    const v = new THREE.Vector3().crossVectors(ax, u).normalize()
+    // Ring centroid (average) for stable projection
+    const c = poly.reduce((acc, p) => acc.add(new THREE.Vector3(p[0], p[1], p[2])), new THREE.Vector3()).multiplyScalar(1 / poly.length)
+    let best = null
+    let bestAbs = Infinity
+    for (let i = 0; i < poly.length; i++) {
+      const p = new THREE.Vector3(poly[i][0], poly[i][1], poly[i][2])
+      const d = p.clone().sub(c)
+      // Project into cross-section plane
+      const dPlane = d.sub(ax.clone().multiplyScalar(d.dot(ax)))
+      const x = dPlane.dot(u)
+      const y = dPlane.dot(v)
+      const ang = Math.atan2(y, x) // -pi..pi, target azimuth is 0 along u
+      const absAng = Math.abs(ang)
+      if (absAng < bestAbs) { bestAbs = absAng; best = p }
+    }
+    return best
+  } catch (_) { return null }
+}
+
 export function intersectWithPlane(layer, planePoint, planeNormal, tieBreakerDir, preferNear = null) {
   try {
     const poly = layer?.polylines?.[0]

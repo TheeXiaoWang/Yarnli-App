@@ -39,9 +39,16 @@ export const useDecorStore = create((set, get) => ({
   gridAngularOffsetDeg: 0,
   eyes: [], // { id, position:[x,y,z], normal:[x,y,z], radius }
   yarns: [], // { id, start:[x,y,z], end:[x,y,z], radius, color }
-  feltPieces: [], // { id, shape: [{x,y}], color, position:[x,y,z], normal:[x,y,z], scale }
+  feltPieces: [], // { id, shape: [{x,y}], color, position:[x,y,z], normal:[x,y,z], scale, rotation }
   showFeltModal: false,
   feltColor: '#ff6b6b', // Default felt color
+  feltScale: 1.0, // Default felt scale (0.1 - 10.0)
+  feltRotation: 0, // Default felt rotation in degrees (0 - 360)
+  selectedFeltShape: null, // Currently selected shape key (e.g., 'heart', 'star')
+  selectedFeltShapeData: null, // Full shape data object
+  showCustomShapeEditor: false, // Show/hide custom shape editor drawer
+  customShapes: [], // User-created custom shapes
+  feltSurfaceHover: null, // Current surface hover state for felt preview { position, normal, object }
   pendingYarnStart: null, // [x,y,z] | null
   pendingYarnStartId: null,
   pendingYarnStartSourceObject: null, // source object for pending yarn start
@@ -54,6 +61,8 @@ export const useDecorStore = create((set, get) => ({
   selectionRadiusPx: 56, // pixel radius for hover/selection leniency
   showOrbitProxy: false, // debug render for orbital proxy sphere/mesh
   showSourceObject: false, // show the base object used to derive nodes
+  showDebugRaycastMesh: true, // show the semi-transparent green raycast target mesh for debugging
+  showFeltVertices: false, // show debug vertex markers on felt pieces
   yarnOrbitalDistance: 0.15, // distance yarn orbits from object surface
   curvatureCompensation: 0.7, // how much to reduce orbital distance at high-curvature areas (0=no reduction, 1=full reduction)
   usedPoints: new Set(), // grid point ids already decorated
@@ -124,6 +133,8 @@ export const useDecorStore = create((set, get) => ({
   setCurvatureCompensation: (v) => set({ curvatureCompensation: Math.max(0.0, Math.min(1.0, Number(v) || 0.7)) }),
   toggleOrbitProxy: () => set((s) => ({ showOrbitProxy: !s.showOrbitProxy })),
   toggleSourceObject: () => set((s) => ({ showSourceObject: !s.showSourceObject })),
+  toggleDebugRaycastMesh: () => set((s) => ({ showDebugRaycastMesh: !s.showDebugRaycastMesh })),
+  toggleFeltVertices: () => set((s) => ({ showFeltVertices: !s.showFeltVertices })),
 
   hasUsedPoint: (pointId) => {
     try { return get().usedPoints.has(pointId) } catch (_) { return false }
@@ -225,17 +236,45 @@ export const useDecorStore = create((set, get) => ({
   openFeltModal: () => set({ showFeltModal: true }),
   closeFeltModal: () => set({ showFeltModal: false }),
   setFeltColor: (color) => set({ feltColor: color }),
-  
-  addFeltPiece: ({ shape, color, position, normal, scale = 1.0 }) => {
+  setFeltScale: (scale) => set({ feltScale: Math.max(0.1, Math.min(10.0, Number(scale) || 1.0)) }),
+  setFeltRotation: (rotation) => set({ feltRotation: Number(rotation) || 0 }),
+  setSelectedFeltShape: (shapeKey, shapeData) => set({
+    selectedFeltShape: shapeKey,
+    selectedFeltShapeData: shapeData
+  }),
+  openCustomShapeEditor: () => set({ showCustomShapeEditor: true }),
+  closeCustomShapeEditor: () => set({ showCustomShapeEditor: false }),
+  addCustomShape: (shape) => set((s) => ({
+    customShapes: [...s.customShapes, shape]
+  })),
+  setFeltSurfaceHover: (hoverState) => set({ feltSurfaceHover: hoverState }),
+
+  addFeltPiece: ({ shape, color, position, normal, scale = 1.0, rotation = 0 }) => {
     const id = get().nextId
+    const finalScale = scale || get().feltScale
+    const finalRotation = rotation !== undefined ? rotation : get().feltRotation
     set((s) => ({
-      feltPieces: [...s.feltPieces, { id, shape, color, position: [...position], normal: [...normal], scale }],
+      feltPieces: [...s.feltPieces, {
+        id,
+        shape,
+        color,
+        position: [...position],
+        normal: [...normal],
+        scale: finalScale,
+        rotation: finalRotation
+      }],
       nextId: s.nextId + 1
     }))
     return { status: 'completed', id }
   },
 
-  removeFeltPiece: (id) => set((s) => ({ 
+  updateFeltPiece: (id, updates) => set((s) => ({
+    feltPieces: s.feltPieces.map(f =>
+      f.id === id ? { ...f, ...updates } : f
+    )
+  })),
+
+  removeFeltPiece: (id) => set((s) => ({
     feltPieces: s.feltPieces.filter(f => f.id !== id)
   })),
 

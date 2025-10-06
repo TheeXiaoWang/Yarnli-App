@@ -39,34 +39,62 @@ const DecorScene = () => {
     // Debug mount effect - populate global array from scene store if empty
     React.useEffect(() => {
         console.log('🟪 DecorScene mount effect - checking for objects')
-        
+
         // Check sceneStore for all objects
         const { objects } = useSceneStore.getState()
         console.log('🟪 All objects in scene store:', objects)
         console.log('🟪 Number of objects:', objects.length)
-        
+
         // Clear any fallback objects from global array
         if (window.__EDITOR_ALL_OBJECTS__) {
             window.__EDITOR_ALL_OBJECTS__ = window.__EDITOR_ALL_OBJECTS__.filter(obj => obj.id !== 'fallback')
             console.log('🟪 Removed any fallback objects from global array')
         }
-        
-        // If global array is empty but scene store has objects, populate it
+
+        // If global array is empty but scene store has objects, populate it with fallback meshes
         if ((!window.__EDITOR_ALL_OBJECTS__ || window.__EDITOR_ALL_OBJECTS__.length === 0) && objects.length > 0) {
-            console.log('🟪 Global array empty but scene store has objects - populating from scene store')
-            window.__EDITOR_ALL_OBJECTS__ = objects.map(obj => ({
-                id: obj.id,
-                mesh: null, // No mesh reference available, will create fallback
-                object: obj
-            }))
-            console.log('🟪 Populated global array with', window.__EDITOR_ALL_OBJECTS__.length, 'objects from scene store')
+            console.log('🟪 Global array empty but scene store has objects - creating fallback meshes')
+            window.__EDITOR_ALL_OBJECTS__ = objects.map(obj => {
+                // Create a fallback mesh based on object type
+                let geometry
+                if (obj.type === 'sphere') {
+                    geometry = new THREE.SphereGeometry(1, 32, 32)
+                } else if (obj.type === 'cone') {
+                    geometry = new THREE.ConeGeometry(1, 2, 32)
+                } else {
+                    geometry = new THREE.SphereGeometry(1, 16, 16)
+                }
+
+                const material = new THREE.MeshBasicMaterial({ color: obj.color || 0xff0000 })
+                const mesh = new THREE.Mesh(geometry, material)
+
+                // Apply transforms
+                mesh.position.set(...(obj.position || [0, 0, 0]))
+                mesh.scale.set(...(obj.scale || [1, 1, 1]))
+                mesh.rotation.set(
+                    (obj.rotation?.[0] || 0) * (Math.PI / 180),
+                    (obj.rotation?.[1] || 0) * (Math.PI / 180),
+                    (obj.rotation?.[2] || 0) * (Math.PI / 180)
+                )
+                mesh.updateMatrix()
+                mesh.updateMatrixWorld(true)
+
+                console.log('🟪 Created fallback mesh for:', obj.id, obj.type)
+
+                return {
+                    id: obj.id,
+                    mesh: mesh, // Now we have an actual mesh!
+                    object: obj
+                }
+            })
+            console.log('🟪 Populated global array with', window.__EDITOR_ALL_OBJECTS__.length, 'fallback meshes')
         }
-        
+
         // Check global array
         console.log('🟪 Global editor objects:', window.__EDITOR_ALL_OBJECTS__)
         console.log('🟪 Global editor objects length:', window.__EDITOR_ALL_OBJECTS__?.length || 0)
     }, []) // Empty dependency array - run once on mount
-    const { tool, showGridPoints, alwaysShowAllNodes, addEyeAt, startOrFinishYarnAt, eyes, yarns, feltPieces, pendingYarnStart, selectedYarnId, selectYarn, removeYarn, clearYarnSelection, addFeltPiece, removeFeltPiece, yarnRadiusFromLevel, eyeScale, yarnOrbitalDistance, curvatureCompensation, showOrbitProxy, showSourceObject } = useDecorStore()
+    const { tool, showGridPoints, alwaysShowAllNodes, addEyeAt, startOrFinishYarnAt, eyes, yarns, feltPieces, pendingYarnStart, selectedYarnId, selectedFeltId, selectYarn, selectFelt, removeYarn, removeFeltPiece, clearYarnSelection, clearFeltSelection, addFeltPiece, yarnRadiusFromLevel, eyeScale, yarnOrbitalDistance, curvatureCompensation, showOrbitProxy, showSourceObject, setFeltSurfaceHover: setFeltSurfaceHoverStore, feltScale, feltRotation } = useDecorStore()
     
     // Calculate dynamic orbital distance based on node size
     const dynamicOrbitalDistance = React.useMemo(() => {
@@ -140,23 +168,34 @@ const DecorScene = () => {
     const { gl, camera, scene } = useThree()
     
     // Get the source object for yarn orbital calculations
+    // State to hold the raycast target mesh reference
+    const [raycastTargetMesh, setRaycastTargetMesh] = React.useState(null)
+
     const sourceObject = React.useMemo(() => {
         // First try to get from global editor objects
         if (window.__EDITOR_ALL_OBJECTS__ && window.__EDITOR_ALL_OBJECTS__.length > 0) {
             const editorObj = window.__EDITOR_ALL_OBJECTS__[0] // Use first object for now
-            console.log('🟡 Using source object from editor:', editorObj.object)
-            return editorObj.object
+            console.log('🟡 Using source object from editor (full structure):', editorObj)
+            // Return the full structure { id, mesh, object } so FeltRaycastTargets can access the mesh
+            return editorObj
         }
-        
+
         // Fallback to selectedObject from scene store
         if (selectedObject) {
             console.log('🟡 Using source object from scene store:', selectedObject)
-            return selectedObject
+            // Wrap in structure for consistency
+            return { id: selectedObject.id, mesh: null, object: selectedObject }
         }
-        
+
+        // Fallback to raycast target mesh (the green debug sphere)
+        if (raycastTargetMesh) {
+            console.log('🟡 Using raycast target mesh (fallback sphere):', raycastTargetMesh)
+            return { id: 'raycast-target', mesh: raycastTargetMesh, object: null }
+        }
+
         console.log('🟡 No source object found - yarn will use fallback logic')
         return null
-    }, [selectedObject])
+    }, [selectedObject, raycastTargetMesh])
 
     // Debug: eyes state each render
     try { console.log('Eyes in store:', eyes) } catch (_) { }
@@ -313,17 +352,34 @@ const DecorScene = () => {
     }, [tool, addEyeAt, startOrFinishYarnAt, settings, yarnRadiusFromLevel, eyeScale, axisDir]);
 
     // Handle surface raycasting for felt placement (when felt tool is active)
+    // Throttled to prevent performance lag (100ms)
     const handleSurfaceHover = useCallback((event) => {
         if (tool !== 'felt') {
             setFeltSurfaceHover(null)
             return
         }
 
-        const pendingShape = sessionStorage.getItem('pendingFeltShape')
-        if (!pendingShape) { setFeltSurfaceHover(null); return }
+        // Throttle updates to reduce lag (similar to eyes tool)
+        const now = performance.now()
+        if (!window._lastFeltHoverUpdate || now - window._lastFeltHoverUpdate > 100) {
+            window._lastFeltHoverUpdate = now
+        } else {
+            return // Skip this update
+        }
+
+        // Check if a shape is selected (from store, not sessionStorage)
+        const { selectedFeltShapeData } = useDecorStore.getState()
+        // Accept both path-based shapes and filled shapes with generateGeometry
+        if (!selectedFeltShapeData || (!selectedFeltShapeData.path && !selectedFeltShapeData.generateGeometry)) {
+            setFeltSurfaceHover(null)
+            return
+        }
 
         const targetsGroup = feltTargetsRef.current
-        if (!targetsGroup) { setFeltSurfaceHover(null); return }
+        if (!targetsGroup) {
+            setFeltSurfaceHover(null)
+            return
+        }
 
         const raycaster = new THREE.Raycaster()
         const mouse = new THREE.Vector2()
@@ -338,35 +394,114 @@ const DecorScene = () => {
         // Collect only meshes under the felt targets group
         const meshes = []
         targetsGroup.traverse((child) => {
-            if (child.isMesh && typeof child.raycast === 'function') meshes.push(child)
+            if (child.isMesh && typeof child.raycast === 'function') {
+                meshes.push(child)
+            }
         })
 
         try {
             const hits = raycaster.intersectObjects(meshes, false)
+
             if (hits && hits.length > 0) {
                 const h = hits[0]
                 const point = h.point
                 const normal = h.face?.normal?.clone?.() || new THREE.Vector3(0,1,0)
                 const worldNormal = normal.clone().transformDirection(h.object.matrixWorld)
-                setFeltSurfaceHover({ position: point, normal: worldNormal, object: h.object })
+                const hoverState = {
+                    position: [point.x, point.y, point.z],
+                    normal: [worldNormal.x, worldNormal.y, worldNormal.z],
+                    object: h.object
+                }
+                setFeltSurfaceHover(hoverState)
+                setFeltSurfaceHoverStore(hoverState)
             } else {
                 setFeltSurfaceHover(null)
+                setFeltSurfaceHoverStore(null)
             }
-        } catch (_e) {
+        } catch (e) {
+            console.error('Felt raycast error:', e)
             setFeltSurfaceHover(null)
+            setFeltSurfaceHoverStore(null)
         }
-    }, [tool, camera, gl])
+    }, [tool, camera, gl, setFeltSurfaceHoverStore])
 
     // Handle surface click for felt placement
     const handleSurfaceClick = useCallback((event) => {
-        // Temporarily disabled due to raycast errors
-        return
+        if (tool !== 'felt' || !feltSurfaceHover) return
+
+        // Get selected shape from store
+        const { selectedFeltShapeData, feltColor, feltScale, feltRotation } = useDecorStore.getState()
+
+        // Accept both path-based shapes and filled shapes with generateGeometry
+        if (!selectedFeltShapeData || (!selectedFeltShapeData.path && !selectedFeltShapeData.generateGeometry)) {
+            console.warn('No felt shape selected')
+            return
+        }
+
+        try {
+            console.log('🟢 Placing felt piece:', {
+                position: feltSurfaceHover.position,
+                normal: feltSurfaceHover.normal,
+                shape: selectedFeltShapeData.name,
+                color: feltColor,
+                scale: feltScale,
+                rotation: feltRotation
+            })
+
+            addFeltPiece({
+                shape: selectedFeltShapeData.filled ? selectedFeltShapeData : selectedFeltShapeData.path,
+                color: feltColor,
+                position: feltSurfaceHover.position,
+                normal: feltSurfaceHover.normal,
+                scale: feltScale,
+                rotation: feltRotation
+            })
+        } catch (err) {
+            console.error('Error placing felt:', err)
+        }
     }, [tool, feltSurfaceHover, addFeltPiece])
+
+    // Handle ESC key to cancel felt placement
+    React.useEffect(() => {
+        if (tool !== 'felt') return
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                console.log('🔴 ESC pressed - canceling felt placement')
+                // Clear the hover preview
+                setFeltSurfaceHoverStore(null)
+                // Optionally deselect the felt tool (uncomment if desired)
+                // useDecorStore.getState().setTool('select')
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [tool, setFeltSurfaceHoverStore])
+
+    // Set up mouse event listeners for felt tool
+    React.useEffect(() => {
+        if (tool !== 'felt') return
+
+        const canvas = gl.domElement
+
+        canvas.addEventListener('pointermove', handleSurfaceHover)
+        canvas.addEventListener('click', handleSurfaceClick)
+
+        return () => {
+            canvas.removeEventListener('pointermove', handleSurfaceHover)
+            canvas.removeEventListener('click', handleSurfaceClick)
+        }
+    }, [tool, gl, handleSurfaceHover, handleSurfaceClick])
 
     return (
         <group>
             {/* Invisible-but-raycastable clones for felt placement */}
-            <FeltRaycastTargets ref={feltTargetsRef} sourceObject={sourceObject} />
+            <FeltRaycastTargets
+                ref={feltTargetsRef}
+                sourceObject={sourceObject}
+                onMeshCreated={setRaycastTargetMesh}
+            />
             {/* Render ALL editor objects when show source object is enabled */}
             {showSourceObject && <AllEditorObjects visible />}
 
@@ -499,8 +634,8 @@ const DecorScene = () => {
                 feltPieces={feltPieces}
                 sourceObject={sourceObject}
                 orbitalDistance={dynamicOrbitalDistance * 0.3} // Felt sits closer to surface
-                selectedFeltId={null} // TODO: Add felt selection
-                onSelectFelt={null} // TODO: Add felt selection
+                selectedFeltId={selectedFeltId}
+                onSelectFelt={selectFelt}
                 onDeleteFelt={removeFeltPiece}
             />
 

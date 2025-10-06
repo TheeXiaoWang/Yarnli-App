@@ -8,10 +8,40 @@ function getPolylineMid(poly) {
 
 function sortLayersByKey(layers) {
   const copy = [...layers]
+  if (copy.length <= 1) return copy
+  const eps = 1e-6
+  const keys = copy.map(l => (l._keyAlongAxis ?? l.y ?? 0))
+  const minKey = Math.min(...keys)
+  const maxKey = Math.max(...keys)
+  // Helper: approximate perimeter to order concentric rings on a flat face
+  const perimeter = (layer) => {
+    try {
+      const poly = layer?.polylines?.[0]
+      if (!Array.isArray(poly) || poly.length < 2) return 0
+      let sum = 0
+      for (let i = 0; i < poly.length - 1; i++) {
+        const ax = poly[i][0], ay = poly[i][1], az = poly[i][2]
+        const bx = poly[i + 1][0], by = poly[i + 1][1], bz = poly[i + 1][2]
+        const dx = ax - bx, dy = ay - by, dz = az - bz
+        sum += Math.sqrt(dx * dx + dy * dy + dz * dz)
+      }
+      return sum
+    } catch (_) { return 0 }
+  }
   copy.sort((a, b) => {
     const ka = (a._keyAlongAxis ?? a.y ?? 0)
     const kb = (b._keyAlongAxis ?? b.y ?? 0)
-    return ka - kb
+    const dk = ka - kb
+    if (Math.abs(dk) > eps) return dk
+    const aOnMin = Math.abs(ka - minKey) <= eps
+    const bOnMin = Math.abs(kb - minKey) <= eps
+    const aOnMax = Math.abs(ka - maxKey) <= eps
+    const bOnMax = Math.abs(kb - maxKey) <= eps
+    // Only tie-break by perimeter when BOTH are on the same extreme plane
+    if (aOnMin && bOnMin) return perimeter(a) - perimeter(b) || 0
+    if (aOnMax && bOnMax) return perimeter(b) - perimeter(a) || 0
+    // Otherwise preserve input stability
+    return 0
   })
   return copy
 }

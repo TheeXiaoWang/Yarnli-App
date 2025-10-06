@@ -28,19 +28,20 @@ const HeroSection = () => {
           </h1>
 
           {/* Simple description */}
-          <p className="text-xl md:text-2xl text-gray-500 mb-12 max-w-2xl mx-auto">
+          <p className="text-xl md:text-2xl mb-12 max-w-2xl mx-auto" style={{color: 'hsl(var(--muted-foreground))'}}>
             Design and share yarn art with our CAD tools. Connect with fellow artists and bring your creative visions to life.
           </p>
 
           {/* Action buttons */}
-          <div className="flex flex-col sm:flex-row gap-6 justify-center">
-            <a href="#/signup" className="yarn-button group text-lg px-8 py-4 inline-flex items-center justify-center rounded-xl">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 justify-center items-center">
+            <a href="#/signup" className="yarn-button yarn-button-primary group text-lg px-8 py-4 inline-flex items-center justify-center min-w-[200px]">
               <span className="mr-3">✨</span>
               Get Started
               <span className="ml-3 group-hover:translate-x-2 transition-transform">→</span>
             </a>
-            <a href="#/gallery" className="yarn-card border-2 border-accent/40 text-lg px-8 py-4 inline-flex items-center justify-center rounded-2xl">
+            <a href="#/gallery" className="yarn-button yarn-button-secondary text-lg px-8 py-4 inline-flex items-center justify-center min-w-[200px]">
               Browse Gallery
+              <span className="ml-3">→</span>
             </a>
           </div>
         </div>

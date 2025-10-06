@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { vec, segVector, segProjected } from '../utils'
-import { nearestPointOnPolyline, intersectWithPlane, makeAzimuthFrame } from '../geometry/anchors'
+import { nearestPointOnPolyline, intersectWithPlane, makeAzimuthFrame, anchorPointAtAzimuth } from '../geometry/anchors'
 
 // Minimal, restart-from-scratch pipe
 // Assumptions:
@@ -17,8 +17,9 @@ export function buildBaselineSegments(arr, poles, axis, measureEvery = 1, opts =
 
   // Azimuth frame: fixed plane rotated around the stack axis by opts.azimuthDeg
   const { useFixed, planeNormal, azimuthDir } = makeAzimuthFrame(axis || new THREE.Vector3(0,1,0), opts?.azimuthDeg)
-  const anchorOnPlane = (layer, prev, planePoint) => useFixed
-    ? intersectWithPlane(layer, planePoint, planeNormal, azimuthDir, prev || planePoint)
+  const anchorOnFixedAzimuth = (layer, prev, planePoint) => useFixed
+    ? (opts?.strictAzimuth ? (anchorPointAtAzimuth(layer, ax, azimuthDir) || nearestPointOnPolyline(layer, prev || planePoint))
+                           : (intersectWithPlane(layer, planePoint, planeNormal, azimuthDir, prev || planePoint) || nearestPointOnPolyline(layer, prev || planePoint)))
     : nearestPointOnPolyline(layer, prev || planePoint)
   const anchorNearestOnly = (layer, prev) => nearestPointOnPolyline(layer, prev) || nearestVertex(layer, prev)
 
@@ -59,73 +60,65 @@ export function buildBaselineSegments(arr, poles, axis, measureEvery = 1, opts =
     return { idx: bestIdx, point: best }
   }
 
-  // Build anchors strictly using the same rule for every ring
-  // Enforce strict neighbor ordering along the stack axis, and ALWAYS start at the ring physically closest to the start pole.
-  const meta = arr.map((layer) => {
-    const c = centroid(layer) || startPole
-    const t = ax.dot(c.clone().sub(startPole))
-    const nearSeg = nearestPointOnPolyline(layer, startPole)
-    const nearVert = nearestVertex(layer, startPole)
-    const near = nearSeg || nearVert || c
-    const dn = near.distanceTo(startPole)
-    return { layer, c, t, dn }
-  })
-  meta.sort((a,b) => a.t - b.t)
-  // Pick start ring: prefer the smallest-perimeter ring in the first axis-side window,
-  // tie‑break by closest distance to the start pole. This favors the tiny first ring.
-  const perimeterOf = (layer) => {
-    const poly = layer?.polylines?.[0]
-    if (!poly || poly.length < 2) return Number.EPSILON // treat degenerate tiny rings as smallest
-    let sum = 0
-    for (let i = 0; i < poly.length - 1; i++) {
-      const a = new THREE.Vector3(...poly[i])
-      const b = new THREE.Vector3(...poly[i + 1])
-      sum += a.distanceTo(b)
+  // Choose ordering strategy
+  let ordered = null
+  if (opts?.orderedAlready) {
+    // Respect the order provided by the caller (expected sIndex ascending)
+    ordered = Array.isArray(arr) ? arr.slice() : []
+  } else {
+    // Build strict geometric order for cylinders and similar axial shapes:
+    // 1) All rings on the start plane (min t), ordered inner→outer
+    // 2) Side wall rings in ascending t
+    // 3) All rings on the end plane (max t), ordered outer→inner
+    const perimeterOf = (layer) => {
+      const poly = layer?.polylines?.[0]
+      if (!poly || poly.length < 2) return Number.EPSILON
+      let sum = 0
+      for (let i = 0; i < poly.length - 1; i++) {
+        const a = new THREE.Vector3(...poly[i])
+        const b = new THREE.Vector3(...poly[i + 1])
+        sum += a.distanceTo(b)
+      }
+      const a0 = new THREE.Vector3(...poly[0])
+      const an = new THREE.Vector3(...poly[poly.length - 1])
+      sum += a0.distanceTo(an)
+      return sum
     }
-    const a0 = new THREE.Vector3(...poly[0])
-    const an = new THREE.Vector3(...poly[poly.length - 1])
-    sum += a0.distanceTo(an)
-    return sum
+    const meta = arr.map((layer, idx) => {
+      const c = centroid(layer) || startPole
+      const t = ax.dot(c.clone().sub(startPole))
+      const per = perimeterOf(layer)
+      const nearSeg = nearestPointOnPolyline(layer, startPole)
+      const nearVert = nearestVertex(layer, startPole)
+      const near = nearSeg || nearVert || c
+      const dn = near.distanceTo(startPole)
+      return { layer, c, t, per, dn, idx }
+    })
+    if (meta.length === 0) return []
+    const epsT = 1e-6
+    let minT = Infinity, maxT = -Infinity
+    for (const m of meta) { if (m.t < minT) minT = m.t; if (m.t > maxT) maxT = m.t }
+    const onStart = meta.filter(m => Math.abs(m.t - minT) <= epsT)
+      .sort((a,b) => a.per - b.per || a.idx - b.idx)
+    const middle = meta.filter(m => m.t > minT + epsT && m.t < maxT - epsT)
+      .sort((a,b) => a.t - b.t || a.idx - b.idx)
+    const onEnd = meta.filter(m => Math.abs(m.t - maxT) <= epsT)
+      .sort((a,b) => b.per - a.per || a.idx - b.idx)
+    ordered = onStart.concat(middle, onEnd).map(m => m.layer)
   }
-  const windowCount = Math.max(1, Math.min(meta.length, Math.round(meta.length * 0.25)))
-  let k = 0
-  let bestPer = Infinity
-  let bestDn = Infinity
-  for (let i = 0; i < windowCount; i++) {
-    const per = perimeterOf(meta[i].layer)
-    const dn = meta[i].dn
-    if (per < bestPer || (per === bestPer && dn < bestDn)) {
-      bestPer = per
-      bestDn = dn
-      k = i
-    }
-  }
-  // STRICT OVERRIDE: choose the ring with the smallest forward axial distance from the start pole
-  // Prefer t >= 0 (in front of the start pole). If none, pick the minimal |t|.
-  let kAxis = -1
-  let bestT = Infinity
-  for (let i = 0; i < meta.length; i++) {
-    const t = meta[i].t
-    if (t >= 0 && t < bestT) { bestT = t; kAxis = i }
-  }
-  if (kAxis < 0) {
-    let bestAbs = Infinity
-    for (let i = 0; i < meta.length; i++) {
-      const at = Math.abs(meta[i].t)
-      if (at < bestAbs) { bestAbs = at; kAxis = i }
-    }
-  }
-  if (kAxis >= 0) k = kAxis
-  const ordered = meta.slice(k).concat(meta.slice(0,k)).map(m => m.layer)
   const anchors = new Array(ordered.length).fill(null)
   const useNearestChain = !!opts?.forceNearestChain
-  // For the very first ring, prefer the truly nearest point to ensure inclusion
-  anchors[0] = anchorNearestOnly(ordered[0], startPole) || anchorOnPlane(ordered[0], startPole, startPole)
+  // For the very first ring:
+  // - If a fixed azimuth frame is requested, lock exact azimuth across all layers
+  // - Otherwise, use the nearest point to the start pole for robust inclusion
+  anchors[0] = useFixed
+    ? (anchorOnFixedAzimuth(ordered[0], startPole, startPole) || anchorNearestOnly(ordered[0], startPole))
+    : (anchorNearestOnly(ordered[0], startPole) || anchorOnFixedAzimuth(ordered[0], startPole, startPole))
   for (let i = 1; i < ordered.length; i++) {
     const prev = anchors[i - 1] || startPole
     anchors[i] = useNearestChain
       ? anchorNearestOnly(ordered[i], prev)
-      : (anchorOnPlane(ordered[i], prev, startPole) || nearestPointOnPolyline(ordered[i], prev))
+      : (anchorOnFixedAzimuth(ordered[i], prev, startPole) || nearestPointOnPolyline(ordered[i], prev))
   }
 
   // Prepare anchors for validation and end-pole alignment
@@ -142,7 +135,7 @@ export function buildBaselineSegments(arr, poles, axis, measureEvery = 1, opts =
   const maxRel = Number.isFinite(opts?.maxRelativeFactor) ? opts.maxRelativeFactor : 3.0
   const maxAxial = Number.isFinite(opts?.maxAxialFactor) ? opts.maxAxialFactor : 3.0
   // Validate P→0
-  if (!opts?.ignorePoles && anchors2[0]) {
+  if (!opts?.ignorePoles && anchors2[0] && !opts?.strictAzimuth) {
     const nearest0 = nearestPointOnPolyline(ordered[0], startPole)
     if (nearest0) {
       const dPref = startPole.distanceTo(anchors2[0])
@@ -151,22 +144,24 @@ export function buildBaselineSegments(arr, poles, axis, measureEvery = 1, opts =
       if (dPref > maxRel * dNear || (Number.isFinite(gap) && gap > 0 && dPref > maxAxial * gap)) anchors2[0] = nearest0
     }
   }
-  // Validate ring→ring chain
-  for (let i = 0; i < ordered.length - 1; i++) {
-    const a = anchors2[i] || startPole
-    const b = anchors2[i + 1]
-    const nearestB = nearestPointOnPolyline(ordered[i + 1], a) || nearestVertex(ordered[i + 1], a)
-    if (nearestB) {
-      const dPref = b ? a.distanceTo(b) : Infinity
-      const dNear = a.distanceTo(nearestB)
-      const gap = axialGap(centroid(ordered[i]) || a, ordered[i + 1])
-      if (!b || dPref > maxRel * dNear || (Number.isFinite(gap) && gap > 0 && dPref > maxAxial * gap)) {
-        anchors2[i + 1] = nearestB
+  // Validate ring→ring chain (skip if strict azimuth locking is requested)
+  if (!opts?.strictAzimuth) {
+    for (let i = 0; i < ordered.length - 1; i++) {
+      const a = anchors2[i] || startPole
+      const b = anchors2[i + 1]
+      const nearestB = nearestPointOnPolyline(ordered[i + 1], a) || nearestVertex(ordered[i + 1], a)
+      if (nearestB) {
+        const dPref = b ? a.distanceTo(b) : Infinity
+        const dNear = a.distanceTo(nearestB)
+        const gap = axialGap(centroid(ordered[i]) || a, ordered[i + 1])
+        if (!b || dPref > maxRel * dNear || (Number.isFinite(gap) && gap > 0 && dPref > maxAxial * gap)) {
+          anchors2[i + 1] = nearestB
+        }
       }
     }
   }
-  // Symmetric to the first ring: re-aim the last ring anchor toward the end pole so it isn't skipped
-  if (endPole) {
+  // Do NOT re-aim the last ring when strict azimuth is requested. Respect fixed azimuth frame.
+  if (endPole && !opts?.strictAzimuth) {
     const endCandidate = nearestPointOnPolyline(ordered[lastIdx], endPole)
       || anchorOnPlane(ordered[lastIdx], endPole, endPole)
       || nearestVertex(ordered[lastIdx], endPole)
@@ -174,6 +169,18 @@ export function buildBaselineSegments(arr, poles, axis, measureEvery = 1, opts =
     if (anchors2[lastIdx] && anchors2[lastIdx].distanceTo(endPole) < epsilon) {
       anchors2[lastIdx] = endPole.clone()
     }
+  }
+
+  // Human-readable index using shared overlay order when available, else sIndex, else local
+  const idxOf = (i) => {
+    const layer = ordered[i]
+    const map = opts?.idxMap
+    if (map && typeof map.get === 'function') {
+      const v = map.get(layer)
+      if (Number.isFinite(v)) return v
+    }
+    const s = layer?.sIndex
+    return Number.isFinite(s) ? s : i
   }
 
   const emit = (objectId, label, a, b) => {
@@ -192,7 +199,7 @@ export function buildBaselineSegments(arr, poles, axis, measureEvery = 1, opts =
 
   // First segment: start pole to first anchor (unless ignored)
   if (!opts?.ignorePoles && anchors2[0]) {
-    segments.push(emit(ordered[0].objectId, 'P→0', startPole, anchors2[0]))
+    segments.push(emit(ordered[0].objectId, `P→${idxOf(0)}` , startPole, anchors2[0]))
   }
 
   // Ring→ring segments
@@ -200,12 +207,12 @@ export function buildBaselineSegments(arr, poles, axis, measureEvery = 1, opts =
     const a = anchors2[i]
     const b = anchors2[i + 1]
     if (!a || !b) continue
-    segments.push(emit(ordered[i].objectId, `${i}→${i + 1}`, a, b))
+    segments.push(emit(ordered[i].objectId, `${idxOf(i)}→${idxOf(i + 1)}`, a, b))
   }
 
   // Last segment: last anchor to end pole (unless ignored or end pole missing)
   if (!opts?.ignorePoles && endPole && anchors2[lastIdx]) {
-    segments.push(emit(ordered[lastIdx].objectId, `${lastIdx}→P`, anchors2[lastIdx], endPole))
+    segments.push(emit(ordered[lastIdx].objectId, `${idxOf(lastIdx)}→P`, anchors2[lastIdx], endPole))
   }
 
   return segments

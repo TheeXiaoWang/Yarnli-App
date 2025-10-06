@@ -8,28 +8,31 @@ const YarnTube = ({ start, end, radius = 0.06, color = null, id = null, selected
     const curve = useMemo(() => {
         const a = new THREE.Vector3(...start)
         const b = new THREE.Vector3(...end)
-        
+
+        // Extract plain object data from structure if needed
+        const sourceObjData = sourceObject?.object || sourceObject
+
         console.log('🟡 YarnTube curve calculation:', {
             start: a,
             end: b,
-            sourceObject: sourceObject,
+            sourceObject: sourceObjData,
             orbitalDistance: orbitalDistance
         })
-        
+
         // Use shape-specific orbital logic if source object is available
-        if (sourceObject) {
-            console.log('🟡 Using shape-specific orbital path for:', sourceObject.type, 'with curvature:', curvature)
-            
-            if (sourceObject.type === 'cone') {
-                const orbitalPoints = calculateConeOrbitalPath(a, b, sourceObject, orbitalDistance, curvature)
+        if (sourceObjData) {
+            console.log('🟡 Using shape-specific orbital path for:', sourceObjData.type, 'with curvature:', curvature)
+
+            if (sourceObjData.type === 'cone') {
+                const orbitalPoints = calculateConeOrbitalPath(a, b, sourceObjData, orbitalDistance, curvature)
                 return new THREE.CatmullRomCurve3(orbitalPoints)
-            } else if (sourceObject.type === 'sphere') {
-                const orbitalPoints = calculateEllipsoidOrbitalPath(a, b, sourceObject, orbitalDistance, curvature)
+            } else if (sourceObjData.type === 'sphere') {
+                const orbitalPoints = calculateEllipsoidOrbitalPath(a, b, sourceObjData, orbitalDistance, curvature)
                 return new THREE.CatmullRomCurve3(orbitalPoints)
             } else {
                 // For other object types, use ellipsoid as fallback
-                console.log('🟡 Using ellipsoid orbital path as fallback for object type:', sourceObject.type)
-                const orbitalPoints = calculateEllipsoidOrbitalPath(a, b, sourceObject, orbitalDistance, curvature)
+                console.log('🟡 Using ellipsoid orbital path as fallback for object type:', sourceObjData.type)
+                const orbitalPoints = calculateEllipsoidOrbitalPath(a, b, sourceObjData, orbitalDistance, curvature)
                 return new THREE.CatmullRomCurve3(orbitalPoints)
             }
         }

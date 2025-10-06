@@ -1,9 +1,10 @@
 import React from 'react'
 import { useDecorStore } from '../../app/stores/decorStore'
 import { useLayerlineStore } from '../../app/stores/layerlineStore'
+import FeltPanel from './components/felt/FeltPanel'
 
 const DecorSidebar = () => {
-  const { tool, setTool, showGridPoints, toggleGridPoints, showGridVectors, toggleGridVectors, showOnlyNearGridPoints, toggleOnlyNearGridPoints, showAllGridPoints, toggleShowAllGridPoints, gridYawStartDeg, gridYawEndDeg, setGridYawStartDeg, setGridYawEndDeg, gridAngularOffsetDeg, setGridAngularOffsetDeg, alwaysShowAllNodes, toggleAlwaysShowAllNodes, eyes, yarns, feltPieces, selectedYarnId, removeYarn, clearAll, cancelYarn, eyeScale, setEyeScale, selectionRadiusPx, setSelectionRadiusPx, yarnOrbitalDistance, setYarnOrbitalDistance, curvatureCompensation, setCurvatureCompensation, showOrbitProxy, toggleOrbitProxy, showSourceObject, toggleSourceObject, updateYarnCurvature, openFeltModal, feltColor, setFeltColor, clearUsedPoints, hiddenItems, toggleItemVisibility, setTypeVisible } = useDecorStore()
+  const { tool, setTool, showGridPoints, toggleGridPoints, showGridVectors, toggleGridVectors, showOnlyNearGridPoints, toggleOnlyNearGridPoints, showAllGridPoints, toggleShowAllGridPoints, gridYawStartDeg, gridYawEndDeg, setGridYawStartDeg, setGridYawEndDeg, gridAngularOffsetDeg, setGridAngularOffsetDeg, alwaysShowAllNodes, toggleAlwaysShowAllNodes, eyes, yarns, feltPieces, selectedYarnId, removeYarn, clearAll, cancelYarn, eyeScale, setEyeScale, selectionRadiusPx, setSelectionRadiusPx, yarnOrbitalDistance, setYarnOrbitalDistance, curvatureCompensation, setCurvatureCompensation, showOrbitProxy, toggleOrbitProxy, showSourceObject, toggleSourceObject, showDebugRaycastMesh, toggleDebugRaycastMesh, showFeltVertices, toggleFeltVertices, updateYarnCurvature, openFeltModal, feltColor, setFeltColor, clearUsedPoints, hiddenItems, toggleItemVisibility, setTypeVisible } = useDecorStore()
   const { settings } = useLayerlineStore()
   const yarnLevel = Number(settings?.yarnSizeLevel) || 4
 
@@ -20,12 +21,7 @@ const DecorSidebar = () => {
             <svg viewBox="0 0 24 24"><path d="M3 12c4-6 14 6 18 0" stroke="currentColor" strokeWidth="2" fill="none"/></svg>
             Yarn
           </button>
-          <button className={`tool-btn ${tool==='felt'?'active':''}`} onClick={() => { 
-            console.log('🟢 Felt button clicked - setting tool to "felt"');
-            setTool('felt'); 
-            console.log('🟢 Tool set to felt, opening modal');
-            openFeltModal(); 
-          }}>
+          <button className={`tool-btn ${tool==='felt'?'active':''}`} onClick={() => setTool('felt')}>
             <svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="2" fill="none"/><path d="M8 10h8M8 14h6" stroke="currentColor" strokeWidth="1"/></svg>
             Felt
           </button>
@@ -106,6 +102,12 @@ const DecorSidebar = () => {
         <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
           <input type="checkbox" checked={showSourceObject} onChange={toggleSourceObject} /> Show source object
         </label>
+        <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+          <input type="checkbox" checked={showDebugRaycastMesh} onChange={toggleDebugRaycastMesh} /> Show raycast mesh (debug)
+        </label>
+        <label style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+          <input type="checkbox" checked={showFeltVertices} onChange={toggleFeltVertices} /> Show felt vertices (debug)
+        </label>
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
           <span style={{ fontSize:13, color:'#ccc', width:80 }}>Orbit distance</span>
           <input 
@@ -137,30 +139,8 @@ const DecorSidebar = () => {
         </div>
       </div>
 
-      <div className="sidebar-section">
-        <h3>Felt Paper</h3>
-        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-          <span style={{ fontSize:13, color:'#ccc', width:80 }}>Color</span>
-          <input 
-            type="color" 
-            value={feltColor} 
-            onChange={(e) => setFeltColor(e.target.value)}
-            style={{ width: 30, height: 25, border: 'none', borderRadius: 4 }}
-          />
-          <span style={{ fontSize:12, color:'#aaa' }}>{feltColor}</span>
-        </div>
-        <div style={{ fontSize:11, color:'#888', marginBottom:8 }}>
-          • Click Felt tool to open cutting modal<br/>
-          • Cut your desired shape with scissors<br/>
-          • Click grid points to place felt pieces<br/>
-          • Felt warps to object curvature
-        </div>
-        {feltPieces.length > 0 && (
-          <div style={{ fontSize:12, color:'#66ffcc', marginTop:8 }}>
-            Felt pieces: {feltPieces.length}
-          </div>
-        )}
-      </div>
+      {/* Felt Panel - Only show when felt tool is active */}
+      {tool === 'felt' && <FeltPanel />}
 
       <div className="sidebar-section">
         <h3>Scene</h3>
