@@ -2,7 +2,7 @@ import React from 'react'
 
 export default function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center px-6 pt-32 pb-20 overflow-hidden">
+    <section className="relative flex items-center justify-center px-6 pt-32 pb-20 overflow-hidden" style={{ minHeight: '100vh' }}>
       <div className="absolute inset-0 -z-10">
         <div
           className="absolute top-20 left-10 w-96 h-96 rounded-full opacity-20 blur-3xl"
