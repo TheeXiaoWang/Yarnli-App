@@ -11,18 +11,12 @@ export default function CTA() {
             borderColor: '#E9E2FF'
           }}
         >
-          {/* Animated decorative elements */}
-          <div className="absolute top-8 right-8 text-5xl animate-bounce" style={{ animationDuration: '3s' }}>
+          {/* Simple decorative elements */}
+          <div className="absolute top-8 right-8 text-4xl opacity-20">
             ✨
           </div>
-          <div className="absolute bottom-8 left-8 text-4xl animate-bounce" style={{ animationDuration: '4s', animationDelay: '1s' }}>
+          <div className="absolute bottom-8 left-8 text-4xl opacity-20">
             🧶
-          </div>
-          <div className="absolute top-1/2 left-12 text-3xl animate-pulse" style={{ animationDuration: '5s' }}>
-            💜
-          </div>
-          <div className="absolute top-1/4 right-16 text-3xl animate-pulse" style={{ animationDuration: '6s', animationDelay: '2s' }}>
-            🎨
           </div>
 
           {/* Content */}
@@ -38,7 +32,7 @@ export default function CTA() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-10">
               <a
                 href="#/editor"
-                className="group px-10 py-5 rounded-full font-bold text-xl flex items-center gap-3 transition-all duration-300 hover:scale-105 shadow-xl"
+                className="group px-10 py-5 rounded-full font-bold text-xl flex items-center gap-3 transition-all duration-300 hover:shadow-2xl hover:translate-y-[-2px] shadow-xl"
                 style={{
                   background: 'linear-gradient(135deg, #C7A9FF 0%, #A484FF 100%)',
                   color: '#ffffff'
@@ -50,7 +44,7 @@ export default function CTA() {
               </a>
               <a
                 href="#/tutorial"
-                className="px-10 py-5 rounded-full font-semibold text-xl transition-all duration-300 hover:scale-105 border-2"
+                className="px-10 py-5 rounded-full font-semibold text-xl transition-all duration-300 hover:translate-y-[-2px] border-2"
                 style={{
                   background: 'rgba(255, 255, 255, 0.95)',
                   color: '#2B244D',

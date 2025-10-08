@@ -58,7 +58,7 @@ export default function Features() {
           {features.map((feature, index) => (
             <div
               key={index}
-              className="group p-8 rounded-3xl border-2 transition-all duration-300 hover:scale-105 hover:-translate-y-1"
+              className="group p-8 rounded-3xl border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-2"
               style={{
                 background: 'rgba(255, 255, 255, 0.8)',
                 borderColor: '#E9E2FF',
@@ -67,7 +67,7 @@ export default function Features() {
             >
               {/* Icon */}
               <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6"
+                className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110"
                 style={{
                   background: `linear-gradient(135deg, ${feature.color} 0%, rgba(255,255,255,0.3) 100%)`,
                   boxShadow: `0 4px 16px ${feature.color}40`

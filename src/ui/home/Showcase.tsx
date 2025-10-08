@@ -40,7 +40,7 @@ export default function Showcase() {
           {examples.map((example, index) => (
             <div
               key={index}
-              className="group relative rounded-3xl p-12 transition-all duration-500 hover:scale-105 border-2 overflow-hidden"
+              className="group relative rounded-3xl p-12 transition-all duration-300 hover:shadow-xl hover:-translate-y-2 border-2 overflow-hidden"
               style={{
                 background: 'rgba(255, 255, 255, 0.9)',
                 borderColor: example.color
@@ -54,7 +54,7 @@ export default function Showcase() {
 
               {/* Content */}
               <div className="relative z-10 text-center">
-                <div className="text-7xl mb-6 transition-transform duration-500 group-hover:scale-125">
+                <div className="text-7xl mb-6 transition-transform duration-300 group-hover:scale-110">
                   {example.emoji}
                 </div>
                 <h3 className="text-2xl font-bold mb-3" style={{ color: '#2B244D' }}>
