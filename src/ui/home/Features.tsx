@@ -5,43 +5,63 @@ export default function Features() {
     {
       icon: '🎯',
       title: '3D CAD Editor',
-      description: 'Design crochet objects in real-time with our intuitive 3D modeling tools. See your creation come to life as you design.',
-      color: '#C7A9FF'
+      description: 'Design crochet objects in real-time with our intuitive 3D modeling tools. See your creation come to life as you design with instant visual feedback.',
+      color: '#C7A9FF',
+      highlights: ['Drag & drop interface', 'Real-time updates', 'Undo/redo support']
     },
     {
       icon: '📋',
       title: 'Auto Pattern Generation',
-      description: 'Get detailed, step-by-step crochet instructions automatically generated from your 3D design.',
-      color: '#F2CFFF'
+      description: 'Get detailed, step-by-step crochet instructions automatically generated from your 3D design. Every stitch calculated perfectly.',
+      color: '#F2CFFF',
+      highlights: ['Row-by-row instructions', 'Stitch diagrams', 'PDF export']
     },
     {
       icon: '✨',
       title: 'Customizable Features',
-      description: 'Add eyes, embellishments, yarn strings, and other decorative elements to bring your designs to life.',
-      color: '#98E1B3'
+      description: 'Add eyes, embellishments, yarn strings, and other decorative elements to bring your designs to life with personality.',
+      color: '#98E1B3',
+      highlights: ['Decoration library', 'Custom placement', 'Color variations']
     },
     {
       icon: '📐',
       title: 'Precise Measurements',
-      description: 'Control every aspect of your design with precise measurements, stitch counts, and scaling options.',
-      color: '#A484FF'
+      description: 'Control every aspect of your design with precise measurements, stitch counts, and scaling options. Get it right every time.',
+      color: '#A484FF',
+      highlights: ['Custom gauge input', 'Size adjustments', 'Material calculator']
     },
     {
       icon: '🎨',
       title: 'Material Preview',
-      description: 'Visualize different yarn colors and textures on your design before you start crocheting.',
-      color: '#E9E2FF'
+      description: 'Visualize different yarn colors and textures on your design before you start crocheting. See exactly how it will look.',
+      color: '#E9E2FF',
+      highlights: ['Color picker', 'Texture simulation', 'Yarn suggestions']
     },
     {
       icon: '💾',
       title: 'Save & Share',
-      description: 'Save your designs to the cloud and share them with the Yarnli community or export for personal use.',
-      color: '#C7A9FF'
+      description: 'Save your designs to the cloud and share them with the Yarnli community or export for personal use. Your work is always safe.',
+      color: '#C7A9FF',
+      highlights: ['Cloud storage', 'Export options', 'Community sharing']
+    },
+    {
+      icon: '🔄',
+      title: 'Version Control',
+      description: 'Track changes and revert to previous versions. Experiment freely knowing you can always go back to what worked.',
+      color: '#98E1B3',
+      highlights: ['Auto-save', 'Version history', 'Compare versions']
+    },
+    {
+      icon: '📱',
+      title: 'Cross-Device Sync',
+      description: 'Start designing on your computer and continue on your tablet. Your projects sync seamlessly across all devices.',
+      color: '#F2CFFF',
+      highlights: ['Cloud sync', 'Mobile friendly', 'Offline mode']
     }
   ]
 
   return (
-    <section className="px-6 py-24 relative">
+    <section id="features" className="px-6 py-24 relative">
       <div className="max-w-7xl mx-auto">
         {/* Section Header */}
         <div className="text-center mb-16">
@@ -79,9 +99,19 @@ export default function Features() {
               <h3 className="text-xl font-bold mb-3" style={{ color: '#2B244D' }}>
                 {feature.title}
               </h3>
-              <p className="leading-relaxed" style={{ color: '#6F679E', fontSize: '15px' }}>
+              <p className="leading-relaxed mb-4" style={{ color: '#6F679E', fontSize: '15px' }}>
                 {feature.description}
               </p>
+              <div className="space-y-2">
+                {feature.highlights.map((highlight, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: feature.color }} />
+                    <span className="text-xs font-medium" style={{ color: '#6F679E' }}>
+                      {highlight}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>

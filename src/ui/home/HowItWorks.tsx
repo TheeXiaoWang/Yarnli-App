@@ -29,7 +29,7 @@ export default function HowItWorks() {
   ]
 
   return (
-    <section className="px-6 py-24 relative overflow-hidden">
+    <section id="how-it-works" className="px-6 py-24 relative overflow-hidden">
       {/* Background decoration */}
       <div className="absolute inset-0 opacity-5">
         <div className="absolute top-20 left-10 w-64 h-64 rounded-full" style={{ background: '#C7A9FF' }} />

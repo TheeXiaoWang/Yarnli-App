@@ -6,19 +6,43 @@ export default function Showcase() {
       title: 'Amigurumi Animals',
       description: 'Create cute stuffed animals with customizable features',
       color: '#C7A9FF',
-      emoji: '🐻'
+      emoji: '🐻',
+      items: ['Bears & Bunnies', 'Sea Creatures', 'Fantasy Characters']
     },
     {
       title: 'Home Decor',
       description: 'Design planters, baskets, and decorative items',
       color: '#F2CFFF',
-      emoji: '🏠'
+      emoji: '🏠',
+      items: ['Plant Hangers', 'Decorative Baskets', 'Wall Hangings']
     },
     {
       title: 'Wearables',
       description: 'Craft hats, scarves, and fashion accessories',
       color: '#98E1B3',
-      emoji: '🧢'
+      emoji: '🧢',
+      items: ['Beanies & Hats', 'Scarves & Cowls', 'Bags & Pouches']
+    },
+    {
+      title: 'Toys & Games',
+      description: 'Fun and playful creations for all ages',
+      color: '#A484FF',
+      emoji: '🧸',
+      items: ['Educational Toys', 'Stuffed Animals', 'Game Pieces']
+    },
+    {
+      title: 'Baby Items',
+      description: 'Soft and safe projects perfect for little ones',
+      color: '#FFB8D1',
+      emoji: '👶',
+      items: ['Baby Blankets', 'Soft Rattles', 'Nursery Decor']
+    },
+    {
+      title: 'Seasonal Decor',
+      description: 'Holiday and seasonal decorations',
+      color: '#FFD93D',
+      emoji: '🎄',
+      items: ['Holiday Ornaments', 'Seasonal Wreaths', 'Festive Garlands']
     }
   ]
 
@@ -36,7 +60,7 @@ export default function Showcase() {
         </div>
 
         {/* Examples Grid */}
-        <div className="grid md:grid-cols-3 gap-8 mb-16">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
           {examples.map((example, index) => (
             <div
               key={index}
@@ -60,9 +84,19 @@ export default function Showcase() {
                 <h3 className="text-2xl font-bold mb-3" style={{ color: '#2B244D' }}>
                   {example.title}
                 </h3>
-                <p style={{ color: '#6F679E', fontSize: '15px' }}>
+                <p className="mb-4" style={{ color: '#6F679E', fontSize: '15px' }}>
                   {example.description}
                 </p>
+                <div className="space-y-1.5">
+                  {example.items.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <div className="w-1 h-1 rounded-full" style={{ background: example.color }} />
+                      <span className="text-xs" style={{ color: '#6F679E' }}>
+                        {item}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           ))}
