@@ -15,6 +15,19 @@ build/
 # Vite
 .vite/
 
+# Testing
+coverage/
+.nyc_output
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Turbo
+.turbo/
+
+# Analysis
+analyze-report.html
+
 # Environment variables
 .env
 .env.local

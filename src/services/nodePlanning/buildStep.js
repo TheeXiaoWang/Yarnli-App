@@ -2,7 +2,8 @@ import * as THREE from 'three'
 import { countNextStitches } from '../../domain/nodes/transitions/countNextStitches'
 import { distributeNextNodes } from '../../domain/nodes/transitions/distributeNextNodes'
 import { mapBucketsMonotonic } from '../../domain/nodes/transitions/mapBuckets'
-import { enforceStepContinuity } from '../../domain/nodes/utils/scaffold'
+// TODO: Restore scaffold.js - temporarily commented out during restructuring
+// import { enforceStepContinuity } from '../../domain/nodes/utils/scaffold'
 import { nearestPointOnPolyline } from '../../ui/editor/measurements/utils'
 
 export function buildStep({ layer, currentNodes, currentRadius, centerV, axisDir, spacingParams, alignByAzimuth, metaCenterArr, handedness, prevSegments = null }) {
@@ -41,7 +42,9 @@ export function buildStep({ layer, currentNodes, currentRadius, centerV, axisDir
   }
 
   const { segments: mapped, map: childMap } = mapBucketsMonotonic(currentNodes, nextRing)
-  const contiguous = enforceStepContinuity(prevSegments, mapped)
+  // TODO: Restore enforceStepContinuity - temporarily using mapped directly
+  // const contiguous = enforceStepContinuity(prevSegments, mapped)
+  const contiguous = mapped // Temporary fallback
   const snapped = (layer?.polylines?.[0])
     ? contiguous.map(([a,b]) => {
         const vec = new THREE.Vector3(b[0], b[1], b[2])

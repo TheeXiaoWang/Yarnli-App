@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import * as THREE from 'three'
 import { computeStitchDimensions } from '../../domain/layerlines/stitches'
-import { magicRing, firstLayerPlanner } from '../../domain/nodes/initial'
-import { computeOvalChainScaffold } from '../../domain/nodes/ovalChainScaffold'
+// TODO: Restore initial/ directory - temporarily commented out during restructuring
+// import { magicRing, firstLayerPlanner } from '../../domain/nodes/initial'
+// TODO: Restore ovalChainScaffold.js - temporarily commented out during restructuring
+// import { computeOvalChainScaffold } from '../../domain/nodes/ovalChainScaffold'
 import { planScaffoldChain, planScaffoldByObject } from '../../services/scaffoldPlanning'
 import { distributeNextNodes, countNextStitches } from '../../domain/nodes/transitions'
 import { useLayerlineStore } from './layerlineStore'
@@ -10,7 +12,9 @@ import { detectOvalStart } from '../../domain/layerlines/pipeline/index.js'
 import { computeStitchGaugeFromSettings } from '../../services/stitches/computeGauge'
 import { STITCH_TYPES } from '../../constants/stitchTypes'
 import { intersectWithPlane, nearestPointOnPolyline } from '../../ui/editor/measurements/utils'
-import { estimateR0FromRing0, averageRadiusFromPolyline, sampleRadiusAtY, buildScaffoldSegmentsToLayer, snapOnLayerByTheta, monotonicBuckets, enforceStepContinuity, normalizeAngle, computeOrderedAngles, angleSpan, filterInterLayerOnly, alignRingByAzimuth } from '../../domain/nodes/utils'
+// TODO: Restore scaffold.js - temporarily commented out during restructuring
+// Removed: buildScaffoldSegmentsToLayer, snapOnLayerByTheta, monotonicBuckets, enforceStepContinuity, filterInterLayerOnly
+import { estimateR0FromRing0, averageRadiusFromPolyline, sampleRadiusAtY, normalizeAngle, computeOrderedAngles, angleSpan, alignRingByAzimuth } from '../../domain/nodes/utils'
 import { findLayerBelow, findLayerAtLeastBelow, findImmediateLayerBelow, pickRingClosestToPoint, pickNextRingByDistance, getFirstLayerRing, deriveStartAndNormal } from '../../domain/layerlines/layerUtils'
 import { computeTargetSpacing } from '../../services/nodePlanning/dynamicSpacing'
 
@@ -50,6 +54,13 @@ export const useNodeStore = create((set, get) => ({
 
   // Generates MR nodes using current layerline output as guidance inputs
   generateNodesFromLayerlines: async ({ generated, settings, handedness = 'right' }) => {
+    // TODO: Restore node generation - temporarily disabled during restructuring
+    // Missing dependencies: magicRing, firstLayerPlanner, computeOvalChainScaffold, scaffold utilities
+    console.warn('[NodeStore] Node generation temporarily disabled - missing dependencies during restructuring')
+    set({ isGenerating: false })
+    return
+
+    /* TEMPORARILY DISABLED - Restore when dependencies are available
     if (!generated || !generated.layers || generated.layers.length === 0) return
     set({ isGenerating: true })
     try {
@@ -320,13 +331,14 @@ export const useNodeStore = create((set, get) => ({
           nodeChildPath: labeled,
           ui: { ...get().ui, nodeLayerVisibleCount: clampedIdx },
         })
-      } catch (err) { 
+      } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[ChainScaffold] generation failed:', err)
       }
     } finally {
       set({ isGenerating: false })
     }
+    */ // END TEMPORARILY DISABLED
   },
 
   // Generate next-layer scaffold nodes and connector segments from current ring

@@ -1,0 +1,456 @@
+# ============================================================================
+# CI/CD WORKFLOW - Continuous Integration Pipeline
+# ============================================================================
+# This workflow automatically runs quality checks, tests, and builds on every
+# code change to ensure code quality and catch bugs early in development.
+#
+# WHAT: Automated testing, linting, building, and deployment pipeline
+# WHY: Ensures code quality, prevents bugs, and maintains consistency
+# WHEN: Runs on every push and pull request to main/staging/develop branches
+# ============================================================================
+
+name: CI
+
+# ============================================================================
+# WORKFLOW TRIGGERS - When this workflow runs
+# ============================================================================
+# The 'on' keyword defines the events that trigger this workflow
+on:
+  # PUSH TRIGGER: Runs when code is pushed directly to these branches
+  # WHY: Validates code immediately after it's merged or committed
+  push:
+    branches: [main, staging, develop]
+
+  # PULL REQUEST TRIGGER: Runs when a PR is opened/updated targeting these branches
+  # WHY: Validates code BEFORE it's merged, preventing bad code from entering main branches
+  pull_request:
+    branches: [main, staging, develop]
+
+# ============================================================================
+# CONCURRENCY CONTROL - Prevents wasted resources
+# ============================================================================
+# WHAT: Cancels any in-progress workflow runs when a new commit is pushed
+# WHY: Saves CI/CD minutes and provides faster feedback on the latest code
+# HOW: Groups workflows by workflow name + branch, then cancels older runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}  # Unique ID: "CI-refs/heads/main"
+  cancel-in-progress: true  # Cancel old runs when new code is pushed
+
+# ============================================================================
+# JOBS - Independent tasks that run in parallel or sequence
+# ============================================================================
+# Each job runs in a fresh virtual machine (runner) and can depend on other jobs
+# Jobs run in parallel by default unless 'needs' is specified
+jobs:
+
+  # ==========================================================================
+  # JOB 1: LINT & TYPE CHECK - Code Quality Validation
+  # ==========================================================================
+  # WHAT: Checks code style, formatting, and TypeScript types
+  # WHY: Catches syntax errors, style violations, and type issues early
+  # WHEN: Runs first (no dependencies), gates all other jobs
+  # ==========================================================================
+  lint:
+    name: Lint & Type Check  # Human-readable name shown in GitHub UI
+
+    # RUNNER: The virtual machine environment where this job executes
+    # WHY ubuntu-latest: Free for public repos, fast, widely supported
+    runs-on: ubuntu-latest
+
+    # STEPS: Sequential tasks executed within this job
+    # Each step runs in the same runner environment
+    steps:
+      # ----------------------------------------------------------------------
+      # STEP 1: Checkout Code
+      # ----------------------------------------------------------------------
+      # WHAT: Downloads your repository code to the runner
+      # WHY: The runner starts empty; we need the code to test it
+      # HOW: Uses GitHub's official checkout action (v4 = latest stable)
+      - name: Checkout code
+        uses: actions/checkout@v4  # 'uses' = run a pre-built action
+        # No 'with' parameters needed - defaults fetch full history
+
+      # ----------------------------------------------------------------------
+      # STEP 2: Setup Node.js Environment
+      # ----------------------------------------------------------------------
+      # WHAT: Installs Node.js and configures npm caching
+      # WHY: Our project needs Node.js to run npm commands
+      # HOW: Downloads and installs specified Node version, sets up PATH
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Node version 20 = Current LTS (Long Term Support)
+          # WHY: Stable, widely supported, matches our development environment
+          node-version: '20'
+
+          # CACHE: Speeds up workflow by caching node_modules between runs
+          # WHY: Downloading dependencies is slow; caching saves 30-60 seconds
+          # HOW: Creates a hash of package-lock.json, restores cache if match
+          cache: 'npm'
+
+      # ----------------------------------------------------------------------
+      # STEP 3: Install Dependencies
+      # ----------------------------------------------------------------------
+      # WHAT: Installs exact versions of packages from package-lock.json
+      # WHY: We need dependencies to run linting, testing, and building
+      # HOW: 'npm ci' is faster and more reliable than 'npm install' for CI
+      - name: Install dependencies
+        run: npm ci  # 'run' = execute a shell command
+        # npm ci vs npm install:
+        # - Deletes node_modules and reinstalls from scratch (clean slate)
+        # - Uses exact versions from package-lock.json (reproducible)
+        # - Fails if package.json and package-lock.json are out of sync
+        # - 2x faster than npm install in CI environments
+
+      # ----------------------------------------------------------------------
+      # STEP 4: Run ESLint
+      # ----------------------------------------------------------------------
+      # WHAT: Checks JavaScript/TypeScript code for style and syntax issues
+      # WHY: Enforces code quality standards and catches common mistakes
+      # HOW: Runs 'npm run lint' which executes ESLint with our config
+      - name: Run ESLint
+        run: npm run lint
+        # Our lint script uses --max-warnings 0, so ANY warning fails the build
+        # WHY: Prevents code quality from degrading over time
+
+      # ----------------------------------------------------------------------
+      # STEP 5: Check Code Formatting
+      # ----------------------------------------------------------------------
+      # WHAT: Verifies all code is formatted according to Prettier rules
+      # WHY: Maintains consistent code style across the entire codebase
+      # HOW: Prettier checks files without modifying them (--check flag)
+      - name: Check formatting
+        run: npm run format:check
+        # If formatting is wrong, this step fails and shows which files need fixing
+        # Developers can run 'npm run format' locally to auto-fix
+
+      # ----------------------------------------------------------------------
+      # STEP 6: TypeScript Type Checking
+      # ----------------------------------------------------------------------
+      # WHAT: Validates TypeScript types without generating output files
+      # WHY: Catches type errors that could cause runtime bugs
+      # HOW: Runs 'tsc --noEmit' to check types without compiling
+      - name: Type check
+        run: npm run typecheck
+        # --noEmit means "check types but don't generate .js files"
+        # WHY: We only need type validation here; Vite handles compilation
+
+  # ==========================================================================
+  # JOB 2: UNIT TESTS - Automated Testing with Coverage
+  # ==========================================================================
+  # WHAT: Runs all unit tests and generates code coverage reports
+  # WHY: Ensures code works correctly and meets coverage thresholds (60%)
+  # WHEN: Runs in parallel with Job 1 (no dependencies)
+  # ==========================================================================
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      # Same checkout and setup steps as Job 1
+      # WHY: Each job runs in a fresh VM, so we must repeat setup
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ----------------------------------------------------------------------
+      # STEP 4: Run Unit Tests with Coverage
+      # ----------------------------------------------------------------------
+      # WHAT: Executes all test files and generates coverage reports
+      # WHY: Validates code functionality and measures test coverage
+      # HOW: Vitest runs tests and generates coverage in multiple formats
+      - name: Run tests with coverage
+        run: npm run test
+        # Our test script runs: vitest run --coverage
+        # - 'run' mode = execute once and exit (vs watch mode)
+        # - '--coverage' = generate coverage reports (HTML, LCOV, JSON)
+        # - Fails if coverage is below 60% threshold (configured in vitest.config.js)
+
+      # ----------------------------------------------------------------------
+      # STEP 5: Upload Coverage to Codecov
+      # ----------------------------------------------------------------------
+      # WHAT: Sends coverage data to Codecov.io for tracking and visualization
+      # WHY: Provides coverage trends, PR comments, and historical tracking
+      # HOW: Uploads LCOV file to Codecov's API
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+
+        # CONDITIONAL EXECUTION: 'if: always()' means run even if tests fail
+        # WHY: We want coverage data even for failing test runs
+        if: always()
+
+        with:
+          # LCOV file path - standard coverage format used by most tools
+          files: ./coverage/lcov.info
+
+          # FLAGS: Tag this upload as 'unittests' for filtering in Codecov UI
+          # WHY: Allows separating unit test coverage from E2E coverage
+          flags: unittests
+
+          # NAME: Identifier for this upload in Codecov
+          name: codecov-umbrella
+
+          # FAIL BEHAVIOR: Don't fail the build if Codecov upload fails
+          # WHY: Codecov is optional; we don't want external service issues to block CI
+          fail_ci_if_error: false
+
+        # ENVIRONMENT VARIABLES: Secrets are accessed via ${{ secrets.NAME }}
+        # WHY: Keeps sensitive tokens out of code and logs
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          # This token must be added to GitHub repo settings: Settings → Secrets
+          # Get token from: https://codecov.io (after linking your repo)
+
+  # ==========================================================================
+  # JOB 3: BUILD - Production Build Validation
+  # ==========================================================================
+  # WHAT: Creates an optimized production build of the application
+  # WHY: Ensures code can be built successfully before deployment
+  # WHEN: Runs AFTER lint and test jobs pass (sequential dependency)
+  # ==========================================================================
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    # DEPENDENCIES: This job waits for lint and test to complete successfully
+    # WHY: No point building if code has lint errors or failing tests
+    # HOW: 'needs' creates a dependency graph; this job won't start until both pass
+    needs: [lint, test]
+    # If either lint or test fails, this job is automatically skipped
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ----------------------------------------------------------------------
+      # STEP 4: Build Production Bundle
+      # ----------------------------------------------------------------------
+      # WHAT: Compiles and bundles code for production deployment
+      # WHY: Validates that code can be built and optimized successfully
+      # HOW: Vite compiles TypeScript, bundles modules, minifies code
+      - name: Build application
+        run: npm run build
+        # Our build script runs: vite build
+        # - Compiles TypeScript to JavaScript
+        # - Bundles all modules into optimized chunks
+        # - Minifies code for smaller file sizes
+        # - Generates source maps for debugging
+        # - Outputs to dist/ directory
+
+      # ----------------------------------------------------------------------
+      # STEP 5: Upload Build Artifacts
+      # ----------------------------------------------------------------------
+      # WHAT: Saves the built files for use in later jobs
+      # WHY: E2E tests and deployment need the production build
+      # HOW: Uploads dist/ folder to GitHub's artifact storage
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          # ARTIFACT NAME: Identifier to download this artifact later
+          name: dist
+
+          # PATH: Which files/folders to upload
+          path: dist/
+
+          # RETENTION: How long GitHub keeps these files (1-90 days)
+          # WHY: 7 days is enough for CI/CD; longer retention costs more
+          retention-days: 7
+          # After 7 days, artifacts are automatically deleted to save storage
+
+  # ==========================================================================
+  # JOB 4: E2E TESTS - End-to-End Browser Testing
+  # ==========================================================================
+  # WHAT: Tests the complete application in real browsers
+  # WHY: Validates user workflows and catches integration issues
+  # WHEN: Runs AFTER build completes (needs the production bundle)
+  # ==========================================================================
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+
+    # DEPENDENCY: Waits for build job to complete
+    # WHY: E2E tests run against the production build (dist/ folder)
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ----------------------------------------------------------------------
+      # STEP 4: Install Playwright Browsers
+      # ----------------------------------------------------------------------
+      # WHAT: Downloads Chromium, Firefox, and WebKit browsers
+      # WHY: Playwright needs actual browsers to run E2E tests
+      # HOW: Downloads browser binaries (~300MB) and system dependencies
+      - name: Install Playwright browsers
+        run: npm run e2e:install
+        # Our script runs: playwright install --with-deps
+        # - Downloads browser binaries (Chromium, Firefox, WebKit)
+        # - Installs system dependencies (fonts, libraries)
+        # - Cached by GitHub Actions for faster subsequent runs
+
+      # ----------------------------------------------------------------------
+      # STEP 5: Download Build Artifacts
+      # ----------------------------------------------------------------------
+      # WHAT: Retrieves the production build from the 'build' job
+      # WHY: E2E tests need the compiled application to test
+      # HOW: Downloads the artifact uploaded in the build job
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # ARTIFACT NAME: Must match the name used in upload-artifact
+          name: dist
+
+          # DESTINATION: Where to extract the artifact
+          path: dist/
+          # This recreates the dist/ folder with the production build
+
+      # ----------------------------------------------------------------------
+      # STEP 6: Run E2E Tests
+      # ----------------------------------------------------------------------
+      # WHAT: Executes Playwright tests across multiple browsers
+      # WHY: Validates the app works correctly in real browser environments
+      # HOW: Playwright launches browsers and simulates user interactions
+      - name: Run E2E tests
+        run: npm run e2e
+        # Our script runs: playwright test
+        # - Starts a preview server (npm run preview)
+        # - Runs tests in Chromium, Firefox, WebKit
+        # - Tests mobile viewports (Pixel 5, iPhone 12)
+        # - Captures screenshots on failure
+        # - Generates HTML report
+
+      # ----------------------------------------------------------------------
+      # STEP 7: Upload Test Report
+      # ----------------------------------------------------------------------
+      # WHAT: Saves Playwright's HTML report for debugging
+      # WHY: Provides detailed test results, screenshots, and traces
+      # HOW: Uploads the playwright-report/ folder as an artifact
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+
+        # CONDITIONAL: Run even if E2E tests fail
+        # WHY: We especially need the report when tests fail for debugging
+        if: always()
+
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+          # Access report: GitHub Actions → Workflow run → Artifacts → Download
+
+  # ==========================================================================
+  # JOB 5: BUNDLE ANALYSIS - Performance Monitoring (Main Branch Only)
+  # ==========================================================================
+  # WHAT: Analyzes JavaScript bundle sizes and composition
+  # WHY: Monitors bundle size to prevent performance regressions
+  # WHEN: Only runs on main branch (not PRs or other branches)
+  # ==========================================================================
+  analyze:
+    name: Bundle Analysis
+    runs-on: ubuntu-latest
+
+    # DEPENDENCY: Needs the production build
+    needs: build
+
+    # CONDITIONAL EXECUTION: Only run on main branch
+    # WHY: Bundle analysis is expensive; we only need it for production code
+    # HOW: github.ref contains the full branch reference (e.g., 'refs/heads/main')
+    if: github.ref == 'refs/heads/main'
+    # This job is skipped for PRs and other branches
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ----------------------------------------------------------------------
+      # STEP 4: Download Build Artifacts
+      # ----------------------------------------------------------------------
+      # WHAT: Retrieves the production build to analyze
+      # WHY: We need the compiled bundles to measure their sizes
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      # ----------------------------------------------------------------------
+      # STEP 5: Analyze Bundle Size
+      # ----------------------------------------------------------------------
+      # WHAT: Generates a visual report of bundle composition
+      # WHY: Helps identify large dependencies and optimization opportunities
+      # HOW: source-map-explorer reads source maps and creates an HTML treemap
+      - name: Analyze bundle
+        run: npm run analyze
+        # Our script runs: source-map-explorer 'dist/assets/*.js' --html analyze-report.html
+        # - Reads JavaScript bundles and their source maps
+        # - Calculates size contribution of each module
+        # - Generates interactive HTML treemap visualization
+        # - Shows which dependencies are taking up the most space
+
+      # ----------------------------------------------------------------------
+      # STEP 6: Upload Analysis Report
+      # ----------------------------------------------------------------------
+      # WHAT: Saves the bundle analysis HTML report
+      # WHY: Allows developers to review bundle composition over time
+      # HOW: Uploads the HTML file for 30 days (longer than other artifacts)
+      - name: Upload analysis report
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-analysis
+          path: analyze-report.html
+
+          # RETENTION: 30 days (longer than test artifacts)
+          # WHY: Bundle analysis is valuable for historical comparison
+          retention-days: 30
+          # Download and open in browser to see interactive treemap
+
+# ============================================================================
+# END OF CI WORKFLOW
+# ============================================================================
+# WORKFLOW SUMMARY:
+# 1. Lint & Type Check (parallel) → Validates code quality
+# 2. Unit Tests (parallel)        → Validates functionality
+# 3. Build (sequential)           → Creates production bundle
+# 4. E2E Tests (sequential)       → Validates user workflows
+# 5. Bundle Analysis (conditional)→ Monitors performance (main only)
+#
+# TOTAL TIME: ~5-8 minutes for full pipeline
+# COST: Free for public repositories on GitHub
+# ============================================================================
+

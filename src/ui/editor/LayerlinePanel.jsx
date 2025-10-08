@@ -1,8 +1,9 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { computeStitchDimensions } from '../../domain/layerlines/stitches'
 import { useSceneStore } from '../../app/stores/sceneStore'
 import { useLayerlineStore } from '../../app/stores/layerlineStore'
 import { useNodeStore } from '../../app/stores/nodeStore'
+import { generateCompletePattern, generateLayersOnly, generateNodesFromExistingLayers } from '../../services/pattern'
 
 const Row = ({ label, children }) => (
   <div className="property-item">
@@ -26,6 +27,12 @@ const LayerlinePanel = () => {
   const { settings, setSettings, generated, isGenerating, generate, exportJSON } = useLayerlineStore()
   const { isGenerating: isGeneratingNodes, generateNodesFromLayerlines, ui, setVisibility, chainScaffoldByLayer } = useNodeStore()
 
+  // State for unified pattern generation
+  const [generationStage, setGenerationStage] = useState(null) // null | 'layers' | 'nodes'
+  const [generationError, setGenerationError] = useState(null)
+  const [useUnifiedButton, setUseUnifiedButton] = useState(true) // Feature flag for testing
+
+  // Legacy handlers (kept for backward compatibility)
   const handleGenerate = async () => {
     await generate(objects)
   }
@@ -41,6 +48,50 @@ const LayerlinePanel = () => {
     })
     await generateNodesFromLayerlines({ generated: freshGenerated, settings: freshSettings })
   }
+
+  // NEW: Unified pattern generation handler
+  const handleGeneratePattern = async () => {
+    setGenerationError(null)
+    setGenerationStage('layers')
+
+    try {
+      const result = await generateCompletePattern({
+        objects,
+        settings,
+        handedness: 'right',
+        onLayersComplete: (layerResult) => {
+          console.log('[UI] Layers complete:', layerResult.layers.length, 'layers')
+          setGenerationStage('nodes')
+        },
+        onNodesComplete: (nodeResult) => {
+          console.log('[UI] Nodes complete:', nodeResult?.nodes?.length || 0, 'nodes')
+          setGenerationStage(null)
+        },
+        onError: (error) => {
+          console.error('[UI] Pattern generation error:', error)
+          setGenerationError(error.message)
+          setGenerationStage(null)
+        },
+      })
+
+      if (!result.success) {
+        setGenerationError(result.error || 'Pattern generation failed')
+      }
+    } catch (error) {
+      console.error('[UI] Unexpected error:', error)
+      setGenerationError(error.message || 'Unexpected error occurred')
+      setGenerationStage(null)
+    }
+  }
+
+  // Helper to get button text based on current stage
+  const getButtonText = () => {
+    if (generationStage === 'layers') return 'Generating Layers...'
+    if (generationStage === 'nodes') return 'Generating Nodes...'
+    return 'Generate Pattern'
+  }
+
+  const isGeneratingPattern = generationStage !== null
 
   return (
     <div className="properties-section">
@@ -125,26 +176,104 @@ const LayerlinePanel = () => {
         />
       </Row>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-        <button className="btn btn-primary" onClick={handleGenerate} disabled={isGenerating}>
-          {isGenerating ? 'Generating…' : 'Generate Layers'}
-        </button>
-        <button className="btn" onClick={handleGenerateNodes} disabled={isGenerating || isGeneratingNodes}>
-          {isGeneratingNodes ? 'Placing…' : 'Generate Nodes'}
-        </button>
-        <button className="btn" onClick={() => {
-          const data = exportJSON()
-          const blob = new Blob([data], { type: 'application/json' })
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = 'layerlines.json'
-          a.click()
-          URL.revokeObjectURL(url)
-        }}>
-          Export JSON
-        </button>
+      {/* Feature Toggle: Switch between unified and legacy buttons */}
+      <div style={{ marginTop: 10, marginBottom: 8 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#aaa' }}>
+          <input
+            type="checkbox"
+            checked={useUnifiedButton}
+            onChange={(e) => setUseUnifiedButton(e.target.checked)}
+          />
+          Use unified "Generate Pattern" button (experimental)
+        </label>
       </div>
+
+      {/* Error Display */}
+      {generationError && (
+        <div style={{
+          marginTop: 8,
+          padding: 8,
+          background: '#ff4444',
+          color: '#fff',
+          borderRadius: 4,
+          fontSize: 12,
+        }}>
+          <strong>Error:</strong> {generationError}
+          <button
+            onClick={() => setGenerationError(null)}
+            style={{
+              marginLeft: 8,
+              background: 'transparent',
+              border: '1px solid #fff',
+              color: '#fff',
+              padding: '2px 6px',
+              borderRadius: 3,
+              cursor: 'pointer',
+            }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Button Section */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        {useUnifiedButton ? (
+          <>
+            {/* NEW: Unified Pattern Generation Button */}
+            <button
+              className="btn btn-primary"
+              onClick={handleGeneratePattern}
+              disabled={isGeneratingPattern}
+              style={{ flex: 1 }}
+            >
+              {getButtonText()}
+            </button>
+            <button className="btn" onClick={() => {
+              const data = exportJSON()
+              const blob = new Blob([data], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = 'layerlines.json'
+              a.click()
+              URL.revokeObjectURL(url)
+            }}>
+              Export JSON
+            </button>
+          </>
+        ) : (
+          <>
+            {/* LEGACY: Separate Layer and Node Buttons */}
+            <button className="btn btn-primary" onClick={handleGenerate} disabled={isGenerating}>
+              {isGenerating ? 'Generating…' : 'Generate Layers'}
+            </button>
+            <button className="btn" onClick={handleGenerateNodes} disabled={isGenerating || isGeneratingNodes}>
+              {isGeneratingNodes ? 'Placing…' : 'Generate Nodes'}
+            </button>
+            <button className="btn" onClick={() => {
+              const data = exportJSON()
+              const blob = new Blob([data], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = 'layerlines.json'
+              a.click()
+              URL.revokeObjectURL(url)
+            }}>
+              Export JSON
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Progress Indicator */}
+      {isGeneratingPattern && (
+        <div style={{ marginTop: 8, fontSize: 12, color: '#4CAF50' }}>
+          {generationStage === 'layers' && '⏳ Stage 1/2: Generating layers...'}
+          {generationStage === 'nodes' && '⏳ Stage 2/2: Generating nodes...'}
+        </div>
+      )}
 
       <div className="properties-section" style={{ marginTop: 15 }}>
         <h3>Stats</h3>

@@ -56,13 +56,14 @@ export const useLayerlineStore = create((set, get) => ({
   setSettings: (partial) => set((state) => ({ settings: { ...state.settings, ...partial } })),
   clear: () => set({ generated: { layers: [], stats: { layerCount: 0, totalLineCount: 0 }, bbox: { min: [0,0,0], max: [0,0,0] }, markers: { poles: [], ring0: null } } }),
 
-  generate: async (objects) => {
-    const { settings } = get()
+  generate: async (objects, customSettings = null) => {
+    const { settings: storeSettings } = get()
+    const effectiveSettings = customSettings || storeSettings
     set({ isGenerating: true })
     try {
       // Yield to the browser so the UI can update before heavy work starts
       await new Promise((resolve) => requestAnimationFrame(() => resolve()))
-      const result = generateLayerLines(objects, settings)
+      const result = generateLayerLines(objects, effectiveSettings)
       set({ generated: result, lastGeneratedAt: Date.now() })
     } finally {
       set({ isGenerating: false })

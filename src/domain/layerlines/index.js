@@ -3,7 +3,8 @@
 
 export { generateSphereLayers } from '../shapes/sphere/layers'
 export { generateConeLayers } from '../shapes/cone/layers'
-export { generateTriangleLayers } from '../shapes/triangle/layers'
+// TODO: Restore triangle/layers.js - temporarily commented out during restructuring
+// export { generateTriangleLayers } from '../shapes/triangle/layers'
 export { generateCylinderLayers } from '../shapes/cylinder/layers'
 export { generateCapsuleLayers } from '../shapes/capsule/layers'
 export { generatePyramidLayers } from '../shapes/pyramid/layers'

@@ -1,49 +1,64 @@
-# CrochetCAD - 3D Layerline Generator
+# 🧶 Yarnli-CAD
 
-A React.js application for creating and manipulating 3D objects with dynamic layerline generation capabilities. Built with Three.js and React Three Fiber.
+**Open-source 3D CAD tool for generating crochet patterns from 3D models**
 
-## Features
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-### Current Features
-- **3D Scene Management**: Add spheres and cones to a 3D environment
-- **Object Transformation**: Scale, rotate, and position objects along any axis
-- **Interactive Controls**: Click to select objects and use transform controls
-- **Real-time Updates**: Live transformation with visual feedback
-- **Modern UI**: Clean, responsive interface with glassmorphism design
-- **Scene Information**: Real-time display of object properties and scene statistics
+Yarnli-CAD is a revolutionary web-based application that bridges the gap between 3D modeling and crochet pattern generation. Design amigurumi, plushies, and complex crochet projects in 3D, then automatically generate stitch-by-stitch instructions.
 
-### Planned Features
-- **Layerline Generation**: Algorithm to generate layerlines based on object intersections
-- **Dynamic Interactions**: Real-time response to object collisions and intersections
-- **Advanced Geometry**: Support for more complex 3D shapes
-- **Export Capabilities**: Export layerlines and 3D models
-- **Animation System**: Animated layerline generation and object interactions
+---
 
-## Getting Started
+## ✨ Features
+
+### 🎨 **3D Design Tools**
+- **Primitive Shapes**: Spheres, cones, cylinders, capsules, pyramids, and torus
+- **Interactive Transformation**: Scale, rotate, and position objects with precision
+- **Real-time Preview**: See your design update instantly as you work
+- **Layer Visualization**: Photoshop-style layers panel for managing objects
+
+### 🧵 **Crochet Pattern Generation**
+- **Automatic Layerline Generation**: Converts 3D geometry into crochet-friendly horizontal layers
+- **Stitch Type Support**: Single crochet (sc), half-double crochet (hdc), double crochet (dc), and more
+- **Node Placement**: Intelligent stitch positioning with proper spacing and orientation
+- **Magic Ring Support**: Automatic magic ring generation for closed shapes
+- **Tilt Calculation**: Accurate stitch angle computation for spherical and conical surfaces
+
+### 🎯 **Advanced Features**
+- **Multi-Object Scenes**: Combine multiple shapes to create complex designs
+- **Intersection Handling**: Smart layerline generation around object intersections
+- **Measurement Overlays**: Visual feedback for dimensions and stitch counts
+- **Yarn Size Customization**: Adjust for different yarn weights and hook sizes
+- **Export Capabilities**: (Coming soon) Export patterns as PDF or text files
+
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js (version 16 or higher)
-- npm or yarn package manager
+- **Node.js** v16 or higher
+- **npm** or **yarn** package manager
 
 ### Installation
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd New_CrochetCAD
-```
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/TheeXiaoWang/New_CrochetCAD123.git
+   cd New_CrochetCAD123
+   ```
 
-2. Install dependencies:
-```bash
-npm install
-```
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-3. Start the development server:
-```bash
-npm run dev
-```
+3. **Start the development server**
+   ```bash
+   npm run dev
+   ```
 
-4. Open your browser and navigate to `http://localhost:3000`
+4. **Open your browser**
+   Navigate to `http://localhost:3000`
 
 ### Building for Production
 
@@ -51,103 +66,143 @@ npm run dev
 npm run build
 ```
 
-## Usage
+The production build will be output to the `dist/` directory.
 
-### Adding Objects
-- Click "Add Sphere" to add a sphere to the scene
-- Click "Add Cone" to add a cone to the scene
-- Objects are placed at random positions initially
+---
 
-### Selecting Objects
-- Click on any object in the 3D scene to select it
-- Selected objects show a green wireframe outline
-- Transform controls appear for selected objects
+## 📖 Usage Guide
 
-### Transforming Objects
-- **Scale**: Use the scale inputs in the control panel or drag the transform controls
-- **Position**: Use the position inputs or drag the transform controls
-- **Rotation**: Use the rotation inputs or drag the transform controls
-- All transformations can be done along any axis (X, Y, Z)
+### Creating Your First Design
 
-### Scene Management
-- "Remove Selected" removes the currently selected object
-- "Clear Scene" removes all objects from the scene
-- The info panel shows real-time statistics about the scene
+1. **Add a Shape**: Click on a primitive button (sphere, cone, etc.) in the left sidebar
+2. **Transform**: Select the object and use the transform controls or input fields to adjust size, position, and rotation
+3. **Generate Layers**: The layerlines are automatically generated based on your 3D geometry
+4. **View Nodes**: Toggle node visibility to see individual stitch placements
+5. **Adjust Settings**: Modify yarn size, stitch types, and spacing in the settings panel
 
 ### Camera Controls
-- **Rotate**: Left click and drag
-- **Pan**: Right click and drag
+- **Rotate**: Left-click and drag
+- **Pan**: Right-click and drag
 - **Zoom**: Scroll wheel
 
-## Technology Stack
+### Keyboard Shortcuts
+- `Delete`: Remove selected object
+- `Ctrl+Z`: Undo (coming soon)
+- `Ctrl+Y`: Redo (coming soon)
 
-- **React 18**: Modern React with hooks and functional components
-- **Three.js**: 3D graphics library
-- **React Three Fiber**: React renderer for Three.js
-- **React Three Drei**: Useful helpers for React Three Fiber
-- **Zustand**: Lightweight state management
-- **Vite**: Fast build tool and development server
+---
 
-## Project Structure
+## 🏗️ Project Structure
 
 ```
-src/
-├── components/
-│   ├── Scene3D.jsx          # Main 3D scene component
-│   ├── SceneObject.jsx      # Individual 3D object component
-│   ├── ControlsPanel.jsx    # UI controls panel
-│   └── InfoPanel.jsx        # Scene information panel
-├── stores/
-│   └── sceneStore.js        # Zustand store for scene state
-├── App.jsx                  # Main application component
-├── main.jsx                 # Application entry point
-└── index.css               # Global styles
+Yarnli-CAD/
+├── src/
+│   ├── app/                    # Application core (stores, hooks, contexts)
+│   ├── ui/                     # React components (editor, decor, home, gallery)
+│   ├── domain/                 # Core crochet logic
+│   │   ├── layerlines/         # Layer generation algorithms
+│   │   ├── nodes/              # Stitch node placement
+│   │   ├── shapes/             # 3D shape definitions
+│   │   └── utils/              # Shared utilities
+│   ├── services/               # Business logic services
+│   │   ├── nodeOrientation/    # Stitch orientation calculations
+│   │   ├── nodePlanning/       # Node spacing and placement
+│   │   ├── scaffoldPlanning/   # Scaffold chain generation
+│   │   └── sphereTiltPipeline/ # Sphere tilt angle computation
+│   ├── constants/              # Stitch types, orientation constants
+│   └── utils/                  # Math and helper utilities
+├── docs/                       # Documentation
+├── LICENSE                     # AGPL-3.0 license
+└── README.md                   # This file
 ```
 
-## Development
+---
 
-### Key Components
+## 🛠️ Technology Stack
 
-1. **Scene3D**: Renders all 3D objects and manages the scene
-2. **SceneObject**: Individual object with transform controls and selection
-3. **ControlsPanel**: UI for adding objects and transforming selected objects
-4. **InfoPanel**: Displays scene statistics and selected object properties
-5. **sceneStore**: Centralized state management using Zustand
+- **React 18** - Modern UI framework with hooks
+- **Three.js** - 3D graphics rendering
+- **React Three Fiber** - React renderer for Three.js
+- **React Three Drei** - Useful helpers and abstractions
+- **Zustand** - Lightweight state management
+- **Vite** - Fast build tool and dev server
+- **Tailwind CSS** - Utility-first CSS framework
 
-### State Management
+---
 
-The application uses Zustand for state management with the following key state:
-- `objects`: Array of all objects in the scene
-- `selectedObject`: Currently selected object
-- `nextId`: Counter for generating unique object IDs
+## 🤝 Contributing
 
-### Adding New Features
+We welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, your help is appreciated.
 
-To add new object types or features:
-1. Update the `sceneStore.js` to handle new object types
-2. Modify `SceneObject.jsx` to render new geometries
-3. Add UI controls in `ControlsPanel.jsx`
-4. Update the info panel if needed
+Please read our [Contributing Guidelines](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before getting started.
 
-## Contributing
+### Development Workflow
 
 1. Fork the repository
-2. Create a feature branch
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+4. Commit with clear messages (`git commit -m 'Add amazing feature'`)
+5. Push to your branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
 
-## License
 
-This project is licensed under the MIT License.
+---
 
-## Future Roadmap
+## 📚 Documentation
 
-- [ ] Layerline generation algorithm
-- [ ] Object intersection detection
-- [ ] Dynamic layerline updates
-- [ ] More geometric primitives
-- [ ] Import/export functionality
-- [ ] Animation system
-- [ ] Performance optimizations
-- [ ] Mobile support
+- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design and component structure
+- **[Glossary](docs/GLOSSARY.md)** - Crochet and technical terminology
+- **[File Structure](docs/FILES.md)** - Detailed file organization
+- **[Node Structure](docs/NODES_STRUCTURE.md)** - Stitch node data format
+
+---
+
+## 🗺️ Roadmap
+
+### Current Focus (v1.0)
+- [x] Basic 3D shape primitives
+- [x] Layerline generation for spheres and cones
+- [x] Node placement with orientation
+- [x] Magic ring support
+- [ ] Pattern export (PDF/text)
+- [ ] Undo/redo functionality
+
+### Future Plans (v2.0+)
+- [ ] Custom shape import (STL/OBJ files)
+- [ ] Color work and stripe patterns
+- [ ] Decrease/increase stitch markers
+- [ ] Assembly instructions for multi-part designs
+- [ ] Community pattern library
+- [ ] Mobile app version
+
+---
+
+## 📄 License
+
+This project is licensed under the **GNU Affero General Public License v3.0** - see the [LICENSE](LICENSE) file for details.
+
+**What this means:**
+- ✅ You can use, modify, and distribute this software
+- ✅ You must share your modifications under the same license
+- ✅ If you run a modified version as a web service, you must make the source code available
+- ✅ Commercial use is allowed
+
+---
+
+## 🙏 Acknowledgments
+
+- Inspired by the amazing crochet community
+- Built with love for makers and crafters worldwide
+- Special thanks to all contributors and testers
+
+---
+
+## 📧 Contact & Support
+
+- **Issues**: [GitHub Issues](https://github.com/TheeXiaoWang/New_CrochetCAD123/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/TheeXiaoWang/New_CrochetCAD123/discussions)
+
+---
+
+**Made with 🧶 by the Yarnli-CAD community**
+

@@ -1,7 +1,6 @@
 // Shape registry - central registry for all crochet shapes
 import { generateSphereLayers } from './sphere/layers.js'
 import { generateConeLayers } from './cone/layers.js'
-import { generateTriangleLayers } from './triangle/layers.js'
 import { generateCylinderLayers } from './cylinder/layers.js'
 import { generateCapsuleLayers } from './capsule/layers.js'
 import { generatePyramidLayers } from './pyramid/layers.js'
@@ -11,37 +10,40 @@ export const SHAPE_REGISTRY = {
   sphere: {
     name: 'Sphere',
     generateLayers: generateSphereLayers,
-    // TODO: Add nodes.js when moved
+    // Note: Node generation is shape-agnostic and handled by nodePlanning services
+    // Shape-specific orientation helpers are in domain/nodes/utils/orientation/
   },
   cone: {
     name: 'Cone',
     generateLayers: generateConeLayers,
-    // TODO: Add nodes.js when moved
+    // Note: Node generation is shape-agnostic and handled by nodePlanning services
+    // Shape-specific orientation helpers are in domain/nodes/utils/orientation/
   },
-  triangle: {
-    name: 'Triangle',
-    generateLayers: generateTriangleLayers,
-    // TODO: Add nodes.js when moved
-  },
+  // TODO: Restore triangle shape - temporarily commented out during restructuring
+  // triangle: {
+  //   name: 'Triangle',
+  //   generateLayers: generateTriangleLayers,
+  //   // Note: Node generation is shape-agnostic and handled by nodePlanning services
+  // },
   cylinder: {
     name: 'Cylinder',
     generateLayers: generateCylinderLayers,
-    // TODO: Add nodes.js when moved
+    // Note: Node generation is shape-agnostic and handled by nodePlanning services
   },
   capsule: {
     name: 'Capsule',
     generateLayers: generateCapsuleLayers,
-    // TODO: Add nodes.js when moved
+    // Note: Node generation is shape-agnostic and handled by nodePlanning services
   },
   pyramid: {
     name: 'Pyramid',
     generateLayers: generatePyramidLayers,
-    // TODO: Add nodes.js when moved
+    // Note: Node generation is shape-agnostic and handled by nodePlanning services
   },
   torus: {
     name: 'Torus',
     generateLayers: generateTorusLayers,
-    // TODO: Add nodes.js when moved
+    // Note: Node generation is shape-agnostic and handled by nodePlanning services
   }
 }
 
