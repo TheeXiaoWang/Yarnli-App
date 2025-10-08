@@ -64,21 +64,21 @@ export default function Features() {
     <section id="features" className="px-6 py-24 relative">
       <div className="max-w-7xl mx-auto">
         {/* Section Header */}
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ color: '#2B244D' }}>
+        <div className="text-center mb-20">
+          <h2 className="text-5xl md:text-6xl font-bold mb-6" style={{ color: '#2B244D' }}>
             Everything You Need to Create
           </h2>
-          <p className="text-xl" style={{ color: '#6F679E' }}>
+          <p className="text-xl md:text-2xl" style={{ color: '#6F679E' }}>
             Powerful features designed for makers of all skill levels
           </p>
         </div>
 
         {/* Features Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           {features.map((feature, index) => (
             <div
               key={index}
-              className="group p-8 rounded-3xl border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-2"
+              className="group p-10 rounded-3xl border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-2"
               style={{
                 background: 'rgba(255, 255, 255, 0.8)',
                 borderColor: '#E9E2FF',
@@ -87,26 +87,26 @@ export default function Features() {
             >
               {/* Icon */}
               <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 transition-transform duration-300 group-hover:scale-110"
+                className="w-20 h-20 rounded-2xl flex items-center justify-center mb-6 transition-transform duration-300 group-hover:scale-110"
                 style={{
                   background: `linear-gradient(135deg, ${feature.color} 0%, rgba(255,255,255,0.3) 100%)`,
                   boxShadow: `0 4px 16px ${feature.color}40`
                 }}
               >
-                <span className="text-3xl">{feature.icon}</span>
+                <span className="text-4xl">{feature.icon}</span>
               </div>
 
-              <h3 className="text-xl font-bold mb-3" style={{ color: '#2B244D' }}>
+              <h3 className="text-2xl font-bold mb-4" style={{ color: '#2B244D' }}>
                 {feature.title}
               </h3>
-              <p className="leading-relaxed mb-4" style={{ color: '#6F679E', fontSize: '15px' }}>
+              <p className="text-base leading-relaxed mb-6" style={{ color: '#6F679E' }}>
                 {feature.description}
               </p>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {feature.highlights.map((highlight, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full" style={{ background: feature.color }} />
-                    <span className="text-xs font-medium" style={{ color: '#6F679E' }}>
+                  <div key={idx} className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full" style={{ background: feature.color }} />
+                    <span className="text-sm font-medium" style={{ color: '#6F679E' }}>
                       {highlight}
                     </span>
                   </div>

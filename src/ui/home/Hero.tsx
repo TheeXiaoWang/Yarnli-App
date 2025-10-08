@@ -30,12 +30,12 @@ export default function Hero() {
       <div className="max-w-7xl mx-auto w-full">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6" style={{
+            <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full mb-8" style={{
               background: 'rgba(199, 169, 255, 0.1)',
               border: '1px solid rgba(199, 169, 255, 0.3)'
             }}>
               <div className="w-2 h-2 rounded-full" style={{ background: '#98E1B3' }} />
-              <span className="text-sm font-medium" style={{ color: '#2B244D' }}>
+              <span className="text-base font-medium" style={{ color: '#2B244D' }}>
                 The Future of Crochet Design
               </span>
             </div>
@@ -58,18 +58,18 @@ export default function Hero() {
               </span>
             </h1>
 
-            <p className="text-lg md:text-xl mb-8" style={{
+            <p className="text-xl md:text-2xl mb-10" style={{
               color: '#6F679E',
               lineHeight: '1.7',
-              maxWidth: '540px'
+              maxWidth: '580px'
             }}>
               Create stunning 3D crochet patterns with Yarnli's powerful CAD tools. Design, preview, and get step-by-step instructions for any crochetable object.
             </p>
 
-            <div className="flex flex-wrap gap-4 mb-8">
+            <div className="flex flex-wrap gap-4 mb-10">
               <a
                 href="#/editor"
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-xl font-semibold text-base shadow-lg transition-all hover:shadow-xl hover:translate-y-[-2px]"
+                className="inline-flex items-center gap-2 px-10 py-5 rounded-xl font-semibold text-lg shadow-lg transition-all hover:shadow-xl hover:translate-y-[-2px]"
                 style={{
                   background: 'linear-gradient(135deg, #C7A9FF 0%, #A484FF 100%)',
                   color: '#ffffff'
@@ -80,7 +80,7 @@ export default function Hero() {
               </a>
               <a
                 href="#/gallery"
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-xl font-semibold text-base transition-all hover:translate-y-[-2px]"
+                className="inline-flex items-center gap-2 px-10 py-5 rounded-xl font-semibold text-lg transition-all hover:translate-y-[-2px]"
                 style={{
                   background: 'rgba(255, 255, 255, 0.9)',
                   color: '#2B244D',
@@ -91,7 +91,7 @@ export default function Hero() {
               </a>
             </div>
 
-            <div className="flex flex-wrap gap-6 text-sm" style={{ color: '#6F679E' }}>
+            <div className="flex flex-wrap gap-6 text-base" style={{ color: '#6F679E' }}>
               <div className="flex items-center gap-2">
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                   <circle cx="10" cy="10" r="9" stroke="#98E1B3" strokeWidth="2"/>

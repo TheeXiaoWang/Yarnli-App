@@ -43,7 +43,7 @@ export default function Navigation() {
               </svg>
             </div>
             <span
-              className="text-2xl font-bold tracking-tight"
+              className="text-3xl font-bold tracking-tight"
               style={{
                 background: 'linear-gradient(135deg, #C7A9FF 0%, #A484FF 100%)',
                 WebkitBackgroundClip: 'text',
@@ -58,28 +58,28 @@ export default function Navigation() {
           <div className="hidden md:flex items-center gap-8">
             <a
               href="#features"
-              className="text-sm font-medium transition-colors hover:opacity-80"
+              className="text-base font-medium transition-colors hover:opacity-80"
               style={{ color: '#2B244D' }}
             >
               Features
             </a>
             <a
               href="#how-it-works"
-              className="text-sm font-medium transition-colors hover:opacity-80"
+              className="text-base font-medium transition-colors hover:opacity-80"
               style={{ color: '#2B244D' }}
             >
               How It Works
             </a>
             <a
               href="#/gallery"
-              className="text-sm font-medium transition-colors hover:opacity-80"
+              className="text-base font-medium transition-colors hover:opacity-80"
               style={{ color: '#2B244D' }}
             >
               Gallery
             </a>
             <a
               href="#/tutorial"
-              className="text-sm font-medium transition-colors hover:opacity-80"
+              className="text-base font-medium transition-colors hover:opacity-80"
               style={{ color: '#2B244D' }}
             >
               Tutorials
@@ -89,7 +89,7 @@ export default function Navigation() {
           <div className="flex items-center gap-3">
             <a
               href="#/editor"
-              className="hidden sm:inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 hover:shadow-lg hover:scale-105"
+              className="hidden sm:inline-flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-base transition-all duration-300 hover:shadow-lg hover:scale-105"
               style={{
                 background: 'linear-gradient(135deg, #C7A9FF 0%, #A484FF 100%)',
                 color: '#ffffff'

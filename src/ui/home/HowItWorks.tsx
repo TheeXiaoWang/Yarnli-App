@@ -39,10 +39,10 @@ export default function HowItWorks() {
       <div className="max-w-6xl mx-auto relative z-10">
         {/* Section Header */}
         <div className="text-center mb-20">
-          <h2 className="text-4xl md:text-5xl font-bold mb-4" style={{ color: '#2B244D' }}>
+          <h2 className="text-5xl md:text-6xl font-bold mb-6" style={{ color: '#2B244D' }}>
             How It Works
           </h2>
-          <p className="text-xl" style={{ color: '#6F679E' }}>
+          <p className="text-xl md:text-2xl" style={{ color: '#6F679E' }}>
             From idea to finished pattern in four simple steps
           </p>
         </div>
@@ -80,13 +80,13 @@ export default function HowItWorks() {
                 </div>
 
                 {/* Icon */}
-                <div className="text-5xl mb-4">{step.icon}</div>
+                <div className="text-6xl mb-5">{step.icon}</div>
 
                 {/* Content */}
-                <h3 className="text-xl font-bold mb-3" style={{ color: '#2B244D' }}>
+                <h3 className="text-2xl font-bold mb-4" style={{ color: '#2B244D' }}>
                   {step.title}
                 </h3>
-                <p className="leading-relaxed" style={{ color: '#6F679E', fontSize: '15px' }}>
+                <p className="text-base leading-relaxed" style={{ color: '#6F679E' }}>
                   {step.description}
                 </p>
               </div>
@@ -98,7 +98,7 @@ export default function HowItWorks() {
         <div className="text-center mt-16">
           <a
             href="#/editor"
-            className="inline-flex items-center gap-3 px-8 py-4 rounded-full font-bold text-lg transition-all duration-300 hover:scale-105 shadow-lg"
+            className="inline-flex items-center gap-3 px-10 py-5 rounded-full font-bold text-xl transition-all duration-300 hover:scale-105 shadow-lg"
             style={{
               background: 'linear-gradient(135deg, #C7A9FF 0%, #A484FF 100%)',
               color: '#ffffff'
