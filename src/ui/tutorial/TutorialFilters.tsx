@@ -15,7 +15,7 @@ const TutorialFilters = ({ categories, activeFilter, onFilterChange, patternCoun
           key={category}
           className={`px-4 py-2 rounded-xl border transition-all duration-200 ${
             category === activeFilter 
-              ? "yarn-button bg-primary text-white shadow-md scale-105" 
+              ? "yarn-button bg-primary text-[#ffffff] shadow-md scale-105" 
               : "yarn-card hover:bg-primary/10 hover:border-primary/50"
           }`}
           onClick={() => onFilterChange(category)}

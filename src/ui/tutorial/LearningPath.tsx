@@ -15,7 +15,7 @@ const LearningPath = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {essentialTechniques.map((technique, index) => (
             <div key={technique} className="flex items-center gap-3 p-4 bg-card rounded-lg border">
-              <div className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center text-sm font-bold">
+              <div className="w-8 h-8 bg-primary text-[#ffffff] rounded-full flex items-center justify-center text-sm font-bold">
                 {index + 1}
               </div>
               <div>
